@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🤖 反诈AI双工对话客户端</title>
+    <title>声网 RTC 双工对话客户端</title>
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
+    <script src="web_uid_validator.js"></script>
+    <script src="web_subscription_manager.js"></script>
     <style>
       * {
         margin: 0;
@@ -13,2203 +16,978 @@
 
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #5a67d8 0%, #805ad5 100%);
         min-height: 100vh;
         display: flex;
         justify-content: center;
         align-items: center;
-        color: #333;
+        color: #1a202c;
+        padding: 24px;
       }
 
       .container {
-        background: rgba(255, 255, 255, 0.95);
+        width: 100%;
+        max-width: 900px;
+        background: rgba(255, 255, 255, 0.96);
         border-radius: 20px;
-        padding: 30px;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-        max-width: 800px;
-        width: 90%;
-        backdrop-filter: blur(10px);
+        padding: 32px;
+        box-shadow: 0 20px 60px rgba(67, 56, 202, 0.18);
       }
 
-      .header {
+      header {
         text-align: center;
-        margin-bottom: 30px;
+        margin-bottom: 24px;
       }
 
-      .header h1 {
+      header h1 {
+        font-size: 2.2rem;
+        color: #2d3748;
+        margin-bottom: 8px;
+      }
+
+      header p {
         color: #4a5568;
-        margin-bottom: 10px;
-        font-size: 2.2em;
       }
 
-      .header p {
-        color: #718096;
-        font-size: 1.1em;
+      .status-panel {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
       }
 
       .status-card {
-        background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 25px;
-        border: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%);
+        border-radius: 14px;
+        padding: 18px;
+        border: 1px solid #cbd5f5;
       }
 
-      .connection-info {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 15px;
-        margin-bottom: 20px;
-        font-size: 0.9em;
-      }
-
-      .connection-info div {
-        padding: 10px;
-        background: rgba(255, 255, 255, 0.7);
-        border-radius: 8px;
-        border: 1px solid #e2e8f0;
-      }
-
-      .connection-info strong {
-        color: #2d3748;
-        display: block;
-        margin-bottom: 5px;
-      }
-
-      .status-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 15px;
-        margin-bottom: 20px;
-      }
-
-      .status-item {
-        text-align: center;
-        padding: 15px;
-        background: rgba(255, 255, 255, 0.8);
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-      }
-
-      .status-label {
-        font-size: 0.85em;
-        color: #718096;
-        margin-bottom: 5px;
-        font-weight: 500;
+      .status-card h2 {
+        font-size: 1rem;
+        color: #2b6cb0;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
       }
 
       .status-value {
-        font-size: 1.1em;
-        font-weight: bold;
-        color: #2d3748;
+        font-size: 1.2rem;
+        font-weight: 600;
       }
 
-      .status-value.success {
-        color: #38a169;
+      .status-value.online {
+        color: #2f855a;
       }
 
-      .status-value.warning {
-        color: #d69e2e;
+      .status-value.offline {
+        color: #c53030;
       }
 
-      .status-value.error {
-        color: #e53e3e;
+      .status-value.idle {
+        color: #b7791f;
       }
 
       .controls {
         display: flex;
-        justify-content: center;
-        gap: 15px;
-        margin-bottom: 25px;
         flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 24px;
+        justify-content: center;
       }
 
-      .btn {
-        padding: 12px 24px;
+      button {
+        padding: 12px 28px;
         border: none;
-        border-radius: 25px;
-        font-size: 1em;
+        border-radius: 999px;
+        font-size: 1rem;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.3s ease;
-        min-width: 120px;
-        position: relative;
+        transition: all 0.25s ease;
+        color: #fff;
+      }
+
+      button.primary {
+        background: linear-gradient(135deg, #48bb78, #38a169);
+      }
+
+      button.primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      button.danger {
+        background: linear-gradient(135deg, #f56565, #e53e3e);
+      }
+
+      button.danger:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .meter {
+        background: #edf2f7;
+        border-radius: 14px;
+        padding: 12px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.95rem;
+        color: #4a5568;
+      }
+
+      .meter span {
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .meter-bar {
+        margin-top: 8px;
+        width: 180px;
+        height: 10px;
+        background: #e2e8f0;
+        border-radius: 999px;
         overflow: hidden;
       }
 
-      .btn:before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
+      .meter-fill {
         height: 100%;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          rgba(255, 255, 255, 0.2),
-          transparent
-        );
-        transition: left 0.5s;
+        width: 0%;
+        background: linear-gradient(135deg, #63b3ed, #3182ce);
+        transition: width 0.1s ease;
       }
 
-      .btn:hover:before {
-        left: 100%;
-      }
-
-      .btn-primary {
-        background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
-        color: white;
-        box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
-      }
-
-      .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(66, 153, 225, 0.4);
-      }
-
-      .btn-secondary {
-        background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
-        color: white;
-        box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
-      }
-
-      .btn-secondary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(237, 137, 54, 0.4);
-      }
-
-      .btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none !important;
-      }
-
-      .audio-visualizer {
-        background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 25px;
-        text-align: center;
-      }
-
-      .audio-visualizer h3 {
-        color: #e2e8f0;
-        margin-bottom: 15px;
-        font-size: 1.1em;
-      }
-
-      #audioCanvas {
-        width: 100%;
-        height: 120px;
-        border-radius: 10px;
-        background: #000;
-        margin-bottom: 10px;
-      }
-
-      .audio-level {
-        color: #4299e1;
-        font-size: 1.2em;
-        font-weight: bold;
-      }
-
-      .log-container {
-        background: #1a202c;
-        border-radius: 15px;
-        padding: 20px;
-        max-height: 300px;
+      .conversation-log {
+        background: #f7fafc;
+        border-radius: 14px;
+        border: 1px solid #e2e8f0;
+        padding: 18px;
+        max-height: 260px;
         overflow-y: auto;
       }
 
-      .log-container h3 {
-        color: #e2e8f0;
-        margin-bottom: 15px;
-        font-size: 1.1em;
-      }
-
       .log-entry {
-        margin-bottom: 8px;
-        padding: 8px 12px;
+        margin-bottom: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px dashed rgba(160, 174, 192, 0.5);
+      }
+
+      .log-entry:last-child {
+        border-bottom: none;
+      }
+
+      .log-entry time {
+        display: block;
+        font-size: 0.8rem;
+        color: #718096;
+        margin-bottom: 4px;
+      }
+
+      .log-entry strong {
+        display: inline-block;
+        min-width: 70px;
+        color: #2b6cb0;
+      }
+
+      .volume-control {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 8px;
+      }
+
+      .volume-control label {
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .volume-control input {
+        width: 220px;
+      }
+
+      footer {
+        margin-top: 24px;
+        text-align: center;
+        font-size: 0.85rem;
+        color: #4a5568;
+      }
+
+      footer code {
+        background: #edf2f7;
+        padding: 2px 6px;
         border-radius: 6px;
-        font-family: "Consolas", "Monaco", monospace;
-        font-size: 0.85em;
-        line-height: 1.4;
-      }
-
-      .log-entry.info {
-        background: rgba(66, 153, 225, 0.1);
-        color: #90cdf4;
-        border-left: 3px solid #4299e1;
-      }
-
-      .log-entry.success {
-        background: rgba(56, 161, 105, 0.1);
-        color: #9ae6b4;
-        border-left: 3px solid #38a169;
-      }
-
-      .log-entry.warning {
-        background: rgba(214, 158, 46, 0.1);
-        color: #faf089;
-        border-left: 3px solid #d69e2e;
-      }
-
-      .log-entry.error {
-        background: rgba(229, 62, 62, 0.1);
-        color: #feb2b2;
-        border-left: 3px solid #e53e3e;
-      }
-
-      .timestamp {
-        opacity: 0.7;
-        font-size: 0.8em;
-      }
-
-      /* 响应式设计 */
-      @media (max-width: 768px) {
-        .container {
-          padding: 20px;
-          margin: 10px;
-        }
-
-        .connection-info {
-          grid-template-columns: 1fr;
-        }
-
-        .status-grid {
-          grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        }
-
-        .controls {
-          flex-direction: column;
-          align-items: center;
-        }
-
-        .btn {
-          width: 100%;
-          max-width: 250px;
-        }
-      }
-
-      /* 动画效果 */
-      @keyframes pulse {
-        0% {
-          transform: scale(1);
-        }
-        50% {
-          transform: scale(1.05);
-        }
-        100% {
-          transform: scale(1);
-        }
-      }
-
-      .recording {
-        animation: pulse 1.5s infinite;
-      }
-
-      /* 滚动条样式 */
-      .log-container::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      .log-container::-webkit-scrollbar-track {
-        background: #2d3748;
-        border-radius: 3px;
-      }
-
-      .log-container::-webkit-scrollbar-thumb {
-        background: #4a5568;
-        border-radius: 3px;
-      }
-
-      .log-container::-webkit-scrollbar-thumb:hover {
-        background: #718096;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h1>🤖 反诈AI双工对话系统</h1>
-        <p>基于WebSocket的实时语音交互平台</p>
-      </div>
+      <header>
+        <h1>声网 RTC 双工对话客户端</h1>
+        <p>浏览器直接加入声网频道，上行麦克风、下行 Bot 音频</p>
+      </header>
 
-      <div class="status-card">
-        <div class="connection-info">
-          <div>
-            <strong>WebSocket服务:</strong>
-            <span id="websocketAddress">wss://cityuantifraud.cn/ws</span>
-          </div>
-          <div>
-            <strong>WebSocket:</strong>
-            <span id="wsAddress">wss://cityuantifraud.cn/ws</span>
-          </div>
-          <div>
-            <strong>连接状态:</strong> <span id="connectionStatus">未连接</span>
-          </div>
-          <div>
-            <strong>系统状态:</strong> <span id="systemStatus">待机中</span>
+      <section class="status-panel">
+        <div class="status-card">
+          <h2>连接状态</h2>
+          <div id="connectionStatus" class="status-value offline">未连接</div>
+          <p id="statusHint">点击开始对话即可连接声网</p>
+        </div>
+        <div class="status-card">
+          <h2>频道信息</h2>
+          <div class="status-value">
+            <div>频道：<span id="channelName">-</span></div>
+            <div>本地 UID：<span id="localUid">-</span></div>
           </div>
         </div>
-
-        <div class="status-grid">
-          <div class="status-item">
-            <div class="status-label">音频状态</div>
-            <div class="status-value" id="audioStatus">未激活</div>
-          </div>
-          <div class="status-item">
-            <div class="status-label">AI状态</div>
-            <div class="status-value" id="aiStatus">待机</div>
-          </div>
-          <div class="status-item">
-            <div class="status-label">延迟</div>
-            <div class="status-value" id="latency">-- ms</div>
+        <div class="status-card">
+          <h2>Bot 状态</h2>
+          <div class="status-value">
+            <div>远端 UID：<span id="remoteUid">-</span></div>
+            <div>音量：<span id="remoteVolume">70%</span></div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="controls">
-        <button class="btn btn-primary" id="connectBtn">🔗 开始对话</button>
-        <button class="btn btn-secondary" id="disconnectBtn" disabled>
-          🔌 断开连接
-        </button>
-        <div
-          id="appleAudioHint"
-          style="
-            display: none;
-            margin-top: 15px;
-            padding: 10px;
-            background: rgba(255, 193, 7, 0.1);
-            border: 1px solid #ffc107;
-            border-radius: 8px;
-            color: #856404;
-            text-align: center;
-          "
-        >
-          🍎 苹果设备用户：请点击此处激活音频播放权限
+      <section class="controls">
+        <button id="connectButton" class="primary">开始对话</button>
+        <button id="disconnectButton" class="danger" disabled>断开连接</button>
+      </section>
+
+      <section class="meter">
+        <div>
+          <span>麦克风电平</span>
+          <div class="meter-bar">
+            <div id="micBar" class="meter-fill"></div>
+          </div>
         </div>
+        <div>
+          <span id="micLevel">0%</span>
+        </div>
+      </section>
+
+      <div class="volume-control">
+        <label for="volumeSlider">Bot 音量</label>
+        <input id="volumeSlider" type="range" min="0" max="100" value="70" />
       </div>
 
-      <div class="audio-visualizer">
-        <h3>🎵 音频可视化</h3>
-        <canvas id="audioCanvas"></canvas>
-        <div class="audio-level">音频电平: <span id="audioLevel">0%</span></div>
-      </div>
+      <section class="conversation-log" id="logContainer"></section>
 
-      <div class="log-container">
-        <h3>📋 系统日志</h3>
-        <div id="logOutput"></div>
-      </div>
+      <div id="remoteAudio"></div>
+
+      <footer>
+        <div>
+          调试命令：<code
+            >curl https://cityuantifraud.com/api/agora/config</code
+          >
+        </div>
+      </footer>
     </div>
 
     <script>
-      // 全局变量
-      let websocket = null;
-      let localStream = null;
+      const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+      let localTrack = null;
+      let remoteAudioTrack = null;
+      let agoraConfigCache = null;
+      const backendBaseUrl = "https://cityuantifraud.com";
+      let isConnecting = false;
+      let subscriptionManager = null;
       let audioContext = null;
       let analyser = null;
-      let audioSourceNode = null;
+      let micDataArray = null;
+      let meterAnimation = null;
 
-      // 苹果设备检测和音频权限管理
-      const isAppleDevice = () => {
-        return /iPad|iPhone|iPod|Macintosh|Mac OS X/.test(navigator.userAgent);
-      };
-
-      // 音频权限预获取标志
-      let audioPermissionGranted = false;
-      let audioContextInitialized = false;
-
-      // WebSocket重连相关变量
-      let websocketReconnecting = false;
-      let reconnectAttempts = 0;
-      let maxReconnectAttempts = 5;
-      let reconnectDelay = 1000; // 初始重连延迟1秒
-      let dataArray = null;
-      let animationId = null;
-
-      // 服务器配置 - szHTTPS版本
-      const WS_URL = "wss://cityuantifraud.cn/ws";
-
-      // DOM元素
       const elements = {
-        connectBtn: document.getElementById("connectBtn"),
-        disconnectBtn: document.getElementById("disconnectBtn"),
-
-        audioStatus: document.getElementById("audioStatus"),
-        aiStatus: document.getElementById("aiStatus"),
-        latency: document.getElementById("latency"),
         connectionStatus: document.getElementById("connectionStatus"),
-        systemStatus: document.getElementById("systemStatus"),
-        logOutput: document.getElementById("logOutput"),
-        audioCanvas: document.getElementById("audioCanvas"),
-        audioLevel: document.getElementById("audioLevel"),
+        statusHint: document.getElementById("statusHint"),
+        channelName: document.getElementById("channelName"),
+        localUid: document.getElementById("localUid"),
+        remoteUid: document.getElementById("remoteUid"),
+        remoteVolume: document.getElementById("remoteVolume"),
+        connectButton: document.getElementById("connectButton"),
+        disconnectButton: document.getElementById("disconnectButton"),
+        volumeSlider: document.getElementById("volumeSlider"),
+        micLevel: document.getElementById("micLevel"),
+        micBar: document.getElementById("micBar"),
+        logContainer: document.getElementById("logContainer"),
       };
 
-      // 统计数据
-      const stats = {
-        startTime: null,
-        messagesReceived: 0,
-        messagesSent: 0,
-        audioChunksSent: 0,
-        errors: 0,
-      };
-
-      // 连接状态枚举 - 简化为只支持WebSocket
-      const ConnectionState = {
-        DISCONNECTED: "disconnected",
-        CONNECTING: "connecting",
-        CONNECTED: "connected",
-        FAILED: "failed",
-      };
-
-      // 连接管理器类 - 简化为只支持WebSocket
-      class ConnectionManager {
-        constructor() {
-          this.state = ConnectionState.DISCONNECTED;
-          this.mode = "websocket";
-          this.audioSender = null;
-          this.audioReceiver = null;
+      function log(source, message, type = "info") {
+        const entry = document.createElement("div");
+        entry.className = "log-entry";
+        const timestamp = new Date().toLocaleTimeString();
+        entry.innerHTML = `
+          <time>${timestamp}</time>
+          <div><strong>${source}</strong>${message}</div>
+        `;
+        if (type === "error") {
+          entry.style.color = "#c53030";
+        } else if (type === "success") {
+          entry.style.color = "#2f855a";
         }
+        elements.logContainer.appendChild(entry);
+        elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
+      }
 
-        async connect() {
-          try {
-            log("🚀 开始连接WebSocket音频服务...");
-            elements.connectBtn.disabled = true;
-            elements.systemStatus.textContent = "连接中...";
-
-            // 苹果设备特殊处理
-            if (isAppleDevice()) {
-              log("🍎 检测到苹果设备，执行特殊音频权限处理...", "warning");
-
-              // 检查HTTPS
-              if (
-                location.protocol !== "https:" &&
-                location.hostname !== "localhost"
-              ) {
-                throw new Error(
-                  "苹果设备需要HTTPS才能正常使用音频功能，请使用HTTPS访问"
-                );
-              }
-
-              // 显示权限请求提示
-              log("🔔 苹果设备需要音频播放权限，正在请求...", "info");
-
-              // 预获取音频播放权限
-              await this.initAppleAudioPermissions();
-
-              // 额外的权限确认
-              log(
-                "✅ 音频权限预获取完成，如播放时仍有问题请点击页面任意位置",
-                "success"
-              );
-            }
-
-            // 检查浏览器兼容性
-            if (
-              !navigator.mediaDevices ||
-              !navigator.mediaDevices.getUserMedia
-            ) {
-              throw new Error("浏览器不支持音频录制");
-            }
-
-            // 初始化WebSocket连接
-            await this.initWebSocket();
-
-            // 获取用户媒体
-            await this.initUserMedia();
-
-            // 启动WebSocket音频模式
-            log("🎯 启动WebSocket音频模式", "success");
-            await this.startWebSocketMode();
-          } catch (error) {
-            log(`连接失败: ${error.message}`, "error");
-            this.handleConnectionError(error);
-          }
-        }
-
-        async startWebSocketMode() {
-          try {
-            this.state = ConnectionState.CONNECTING;
-
-            log("🔄 启动WebSocket音频模式（PCM上行 + MP3下行）");
-
-            // 初始化音频发送器和接收器
-            this.audioSender = new AudioSender(websocket);
-            this.audioReceiver = new AudioReceiver(websocket);
-
-            // 🆕 初始化全局Audio对象（在用户手势中）
-            await this.audioReceiver.initGlobalAudio();
-
-            // 开始音频录制和发送
-            await this.audioSender.startRecording(localStream);
-
-            this.state = ConnectionState.CONNECTED;
-
-            elements.systemStatus.textContent = "WebSocket已连接";
-            elements.aiStatus.textContent = "在线";
-            elements.aiStatus.className = "status-value success";
-            elements.disconnectBtn.disabled = false;
-
-            // 详细的音频处理路径日志
-            log("✅ WebSocket音频模式启动成功", "success");
-            log(
-              "🎤 音频上行: PCM 16kHz → WebSocket → 后端AudioProcessor",
-              "info"
-            );
-            log(
-              "🔊 音频下行: TTS MP3 → Base64 → WebSocket → 前端Audio播放",
-              "info"
-            );
-            log("🛡️ 打断机制: VAD检测 → 队列清空 → 音频停止", "info");
-            stats.startTime = Date.now();
-          } catch (error) {
-            this.state = ConnectionState.FAILED;
-            log(`WebSocket音频模式启动失败: ${error.message}`, "error");
-            throw error;
-          }
-        }
-
-        async initWebSocket() {
-          // 复用现有的WebSocket初始化逻辑
-          return initWebSocket();
-        }
-
-        async initUserMedia() {
-          // 复用现有的用户媒体获取逻辑
-          log("请求麦克风权限...");
-          localStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              sampleRate: 16000,
-            },
-            video: false,
-          });
-
-          log("✅ 麦克风权限获取成功");
-          elements.audioStatus.textContent = "已激活";
-          elements.audioStatus.className = "status-value success";
-
-          // 初始化音频可视化（复用现有逻辑）
-          initAudioVisualization();
-        }
-
-        async initAppleAudioPermissions() {
-          try {
-            log("🔧 初始化苹果设备音频权限...");
-
-            // 方法1: 创建AudioContext并激活
-            if (!audioContextInitialized) {
-              const AudioContextClass =
-                window.AudioContext || window.webkitAudioContext;
-              if (!audioContext) {
-                audioContext = new AudioContextClass();
-              }
-
-              // 恢复AudioContext（苹果设备需要用户手势触发）
-              if (audioContext.state === "suspended") {
-                await audioContext.resume();
-                log("✅ AudioContext已激活");
-              }
-
-              // 播放一个静音音频来获取播放权限
-              const buffer = audioContext.createBuffer(1, 1, 22050);
-              const source = audioContext.createBufferSource();
-              source.buffer = buffer;
-              source.connect(audioContext.destination);
-              source.start();
-
-              audioContextInitialized = true;
-            }
-
-            // 方法2: 创建并播放一个真实的Audio元素（更强力的权限获取）
-            const testAudio = new Audio();
-
-            // 创建一个极短的静音MP3 (Base64编码)
-            const silentMP3 =
-              "data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAAW1wM1BST0R1Y2VkIGJ5IEF1ZGFjaXR5AFRJVDIAAAAOAAABzlNvbWV0aGluZyBFbHNlAFRQRTEAAAARAAABzlRoZSBLaWxsZXJzAFRBTEIAAAAQAAABzkRheSAmIEFnZQBUWUVSAAAAFQAAAdBUaGUgS2lsbGVycwBUQ09OAAAAFQAAAQBUZXN0IENvbW1lbnQAVENPUAAAABUAAAEAVGVzdCBDb21tZW50AFRQT1MAAAASAAABADEAVFJDSwAAABIAAAEAMQA=";
-
-            testAudio.src = silentMP3;
-            testAudio.volume = 0.01; // 极低音量
-            testAudio.muted = false;
-
-            // 尝试播放来获取权限
-            try {
-              const playPromise = testAudio.play();
-              if (playPromise !== undefined) {
-                await playPromise;
-                log("✅ 音频播放权限获取成功 (Audio元素方法)");
-              }
-            } catch (audioError) {
-              log(`Audio元素播放失败: ${audioError.message}`, "warning");
-              // 继续尝试其他方法
-            }
-
-            // 方法3: 使用Web Audio API创建更复杂的音频测试
-            if (audioContext) {
-              try {
-                // 创建一个短暂的正弦波
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-
-                // 设置极低音量和短暂持续时间
-                gainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(
-                  0.0001,
-                  audioContext.currentTime + 0.1
-                );
-
-                oscillator.frequency.setValueAtTime(
-                  440,
-                  audioContext.currentTime
-                );
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.1);
-
-                log("✅ Web Audio API权限测试完成");
-              } catch (webAudioError) {
-                log(
-                  `Web Audio API测试失败: ${webAudioError.message}`,
-                  "warning"
-                );
-              }
-            }
-
-            audioPermissionGranted = true;
-            log("✅ 苹果设备音频权限预获取完成");
-          } catch (error) {
-            log(`苹果设备音频权限获取失败: ${error.message}`, "error");
-            throw new Error("音频权限获取失败，请确保允许音频播放权限");
-          }
-        }
-
-        handleConnectionError(error) {
-          elements.connectBtn.disabled = false;
-          elements.systemStatus.textContent = "连接失败";
-          stats.errors++;
-
-          // 苹果设备特殊错误提示
-          if (isAppleDevice() && error.message.includes("音频")) {
-            log(`🍎 苹果设备音频问题: ${error.message}`, "error");
-            log(
-              "💡 建议: 1) 确保使用HTTPS 2) 点击页面任意位置后重试 3) 检查Safari音频权限",
-              "info"
-            );
-          } else {
-            log(`连接失败建议: 请检查网络连接或刷新页面重试`, "info");
-          }
-        }
-
-        async switchToWebSocketMode() {
-          try {
-            log("🔄 重新初始化WebSocket音频模式...", "info");
-
-            // 清理音频可视化
-            cleanupAudioVisualization();
-
-            // 清理旧的音频组件
-            if (this.audioSender) {
-              this.audioSender.stop();
-              this.audioSender = null;
-            }
-            if (this.audioReceiver) {
-              this.audioReceiver.stop();
-              this.audioReceiver = null;
-            }
-
-            // 苹果设备特殊处理：重置音频权限状态和AudioContext
-            if (isAppleDevice()) {
-              audioPermissionGranted = false;
-              if (audioContext) {
-                audioContext.close();
-              }
-              // 重新创建AudioContext避免状态漂移
-              const AudioContextClass =
-                window.AudioContext || window.webkitAudioContext;
-              audioContext = new AudioContextClass({ sampleRate: 16000 });
-            }
-
-            // 重新初始化音频组件
-            this.audioSender = new AudioSender(websocket);
-            this.audioReceiver = new AudioReceiver(websocket);
-
-            await this.audioReceiver.initGlobalAudio();
-            await this.audioSender.startRecording(localStream);
-
-            // 重新初始化音频可视化
-            initAudioVisualization();
-
-            log("✅ WebSocket音频模式重新初始化完成", "success");
-          } catch (error) {
-            log(`WebSocket模式重新初始化失败: ${error.message}`, "error");
-            throw error;
-          }
-        }
-
-        async disconnect() {
-          try {
-            log("正在断开连接...");
-
-            // 清理音频可视化
-            cleanupAudioVisualization();
-
-            // 停止音频发送器
-            if (this.audioSender) {
-              this.audioSender.stop();
-              this.audioSender = null;
-            }
-
-            // 停止音频接收器
-            if (this.audioReceiver) {
-              this.audioReceiver.stop();
-              this.audioReceiver = null;
-            }
-
-            // 断开WebSocket连接
-            await disconnectFromServer();
-
-            this.state = ConnectionState.DISCONNECTED;
-          } catch (error) {
-            log(`断开连接时出错: ${error.message}`, "error");
-          }
+      function setConnectionState(state, hint) {
+        elements.connectionStatus.classList.remove("online", "offline", "idle");
+        elements.connectionStatus.classList.add(state);
+        elements.connectionStatus.textContent =
+          state === "online"
+            ? "已连接"
+            : state === "offline"
+            ? "未连接"
+            : "准备中";
+        if (hint) {
+          elements.statusHint.textContent = hint;
         }
       }
 
-      // 音频发送器类 - 简化为只支持WebSocket
-      class AudioSender {
-        constructor(connection) {
-          this.connection = connection;
-          this.mediaRecorder = null;
-          this.isRecording = false;
-          this.sequenceNumber = 0;
-
-          // PCM录制相关属性
-          this.audioContext = null;
-          this.sourceNode = null;
-          this.processorNode = null;
-          this.isPCMRecording = false;
+      async function fetchAgoraConfig(role = "publisher") {
+        if (role === "publisher" && agoraConfigCache) {
+          return agoraConfigCache;
+        }
+        const url = new URL("/api/agora/config", backendBaseUrl);
+        url.searchParams.set("role", role);
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!response.ok) {
+          throw new Error(`后端接口返回 ${response.status}`);
+        }
+        const config = await response.json();
+        if (!config || !config.appId) {
+          throw new Error("后端缺少声网 App ID");
         }
 
-        async initPCMRecorder(stream) {
-          try {
-            // 检查AudioContext支持
-            if (!window.AudioContext && !window.webkitAudioContext) {
-              throw new Error("浏览器不支持AudioContext，降级到MediaRecorder");
+        // UID配置验证
+        const validationResult = WebUIDValidator.validateConfiguration(config);
+        if (!validationResult.isValid) {
+          console.error("[CONFIG] UID配置验证失败:", validationResult.errors);
+          throw new Error(`UID配置无效: ${validationResult.errors.join(", ")}`);
+        }
+
+        if (validationResult.warnings.length > 0) {
+          console.warn("[CONFIG] UID配置警告:", validationResult.warnings);
+        }
+
+        // 记录UID信息
+        WebUIDValidator.logUIDInfo("配置验证", config.botUid, {
+          userUID: config.uid,
+          channel: config.channel,
+        });
+
+        if (role === "publisher") {
+          agoraConfigCache = config;
+        }
+        return config;
+      }
+
+      function startMicMeter(track) {
+        try {
+          const streamTrack = track.getMediaStreamTrack();
+          if (!streamTrack) {
+            return;
+          }
+          audioContext = new (window.AudioContext ||
+            window.webkitAudioContext)();
+          const source = audioContext.createMediaStreamSource(
+            new MediaStream([streamTrack])
+          );
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          const bufferLength = analyser.frequencyBinCount;
+          micDataArray = new Uint8Array(bufferLength);
+          source.connect(analyser);
+
+          const update = () => {
+            analyser.getByteTimeDomainData(micDataArray);
+            let sum = 0;
+            for (let i = 0; i < micDataArray.length; i += 1) {
+              const value = micDataArray[i] - 128;
+              sum += value * value;
             }
+            const rms = Math.sqrt(sum / micDataArray.length);
+            const level = Math.min(
+              100,
+              Math.max(0, Math.round((rms / 128) * 100))
+            );
+            elements.micLevel.textContent = `${level}%`;
+            if (elements.micBar) {
+              elements.micBar.style.width = `${level}%`;
+            }
+            meterAnimation = requestAnimationFrame(update);
+          };
+          update();
+        } catch (error) {
+          log("系统", `麦克风电平监控异常: ${error.message}`);
+        }
+      }
 
-            // 创建AudioContext（16kHz采样率）
-            const AudioContextClass =
-              window.AudioContext || window.webkitAudioContext;
-            this.audioContext = new AudioContextClass({ sampleRate: 16000 });
+      function stopMicMeter() {
+        if (meterAnimation) {
+          cancelAnimationFrame(meterAnimation);
+          meterAnimation = null;
+        }
+        if (audioContext) {
+          audioContext.close();
+          audioContext = null;
+        }
+        analyser = null;
+        micDataArray = null;
+        elements.micLevel.textContent = "0%";
+        if (elements.micBar) {
+          elements.micBar.style.width = "0%";
+        }
+      }
 
-            // 创建音频源节点
-            this.sourceNode = this.audioContext.createMediaStreamSource(stream);
+      async function connect() {
+        if (isConnecting) {
+          return;
+        }
+        isConnecting = true;
+        setConnectionState("idle", "正在初始化声网通道...");
+        elements.connectButton.disabled = true;
+        log("系统", "准备连接声网 RTC...");
 
-            // 创建ScriptProcessor节点（1024样本缓冲区）
-            this.processorNode = this.audioContext.createScriptProcessor(
-              1024,
-              1,
-              1
+        try {
+          const config = await fetchAgoraConfig("publisher");
+          console.log("[DEBUG] 获取到的Agora配置:", {
+            appId: config.appId,
+            channel: config.channel,
+            uid: config.uid,
+            botUid: config.botUid,
+            token: config.token
+              ? `${config.token.substring(0, 20)}...`
+              : "null",
+          });
+          elements.localUid.textContent = config.uid || "-";
+          elements.channelName.textContent = config.channel || "-";
+
+          if (client.connectionState !== "DISCONNECTED") {
+            await client.leave().catch(() => {});
+          }
+
+          await client.join(
+            config.appId,
+            config.channel,
+            config.token || null,
+            config.uid || null
+          );
+          log("声网", `已加入频道 ${config.channel}`);
+
+          // 初始化订阅管理器 - 声网技术支持建议：显式订阅确保兼容性
+          subscriptionManager = new WebSubscriptionManager(client, {
+            maxRetryAttempts: 3,
+            retryDelay: 2000,
+            enableAutoSubscribe: true,
+            logLevel: "info",
+          });
+
+          // 设置订阅管理器回调
+          subscriptionManager.onSubscriptionSuccess = (
+            uid,
+            mediaType,
+            result
+          ) => {
+            console.log(`[SUBSCRIPTION] ✅ 订阅成功: ${uid} (${mediaType})`);
+            log(
+              "订阅",
+              `成功订阅用户 ${uid} 的${
+                mediaType === "audio" ? "音频" : "视频"
+              }流`
             );
 
-            // 设置音频处理回调
-            this.processorNode.onaudioprocess = (event) => {
-              if (this.isPCMRecording) {
-                const inputBuffer = event.inputBuffer;
-                const pcmData = inputBuffer.getChannelData(0); // Float32Array
-                this.sendPCMChunk(pcmData);
+            // 特别处理Bot用户的音频订阅
+            if (WebUIDValidator.isBotUser(uid) && mediaType === "audio") {
+              console.log(`[SUBSCRIPTION] 🤖 Bot用户音频订阅成功，开始播放`);
+              if (result && result.play) {
+                result.play();
               }
-            };
-
-            // 连接音频节点
-            this.sourceNode.connect(this.processorNode);
-            this.processorNode.connect(this.audioContext.destination);
-
-            // 开始PCM录制
-            this.isPCMRecording = true;
-            log("✅ PCM录制器启动成功 (16kHz单声道)", "success");
-          } catch (error) {
-            log(`PCM录制器初始化失败: ${error.message}`, "error");
-            // 降级到MediaRecorder
-            await this.fallbackToMediaRecorder(stream);
-          }
-        }
-
-        sendPCMChunk(pcmData) {
-          try {
-            // 前端预打断机制已禁用 - 必须依赖后端Whisper转写结果判断打断
-            // 原因：前端简单的RMS检测会绕过后端的黑名单过滤，导致误触发
-            // 现在所有打断决策都由后端的AudioProcessor.process_audio_with_interrupt_decision()处理
-
-            // const rms = Math.sqrt(
-            //   pcmData.reduce((sum, sample) => sum + sample * sample, 0) /
-            //     pcmData.length
-            // );
-            // const isActive = rms > 0.01; // 简单的阈值检测
-            //
-            // // 如果检测到音频活动且有音频正在播放，立即触发前端打断
-            // if (
-            //   isActive &&
-            //   connectionManager.audioReceiver &&
-            //   connectionManager.audioReceiver.isPlaying
-            // ) {
-            //   connectionManager.audioReceiver.clearQueue();
-            //   // 注意：后端的VAD会进行更精确的打断检测
-            // }
-
-            // 转换Float32到Int16（标准音频格式）
-            const int16Data = new Int16Array(pcmData.length);
-            for (let i = 0; i < pcmData.length; i++) {
-              // 限制范围并转换为16位整数
-              const sample = Math.max(-1, Math.min(1, pcmData[i]));
-              int16Data[i] = Math.round(sample * 32767);
             }
+          };
 
-            // 构造PCM音频消息
-            const message = {
-              type: "audio_chunk",
-              data: {
-                data: Array.from(int16Data), // 发送Int16数组
-                format: "pcm_int16",
-                sample_rate: 16000,
-                channels: 1,
-                sequence: this.sequenceNumber++,
-                timestamp: Date.now(),
-                client_id: "web_client_" + Date.now(),
+          subscriptionManager.onSubscriptionFailed = (
+            uid,
+            mediaType,
+            error
+          ) => {
+            console.error(
+              `[SUBSCRIPTION] ❌ 订阅失败: ${uid} (${mediaType})`,
+              error
+            );
+            log(
+              "订阅",
+              `订阅用户 ${uid} 的${
+                mediaType === "audio" ? "音频" : "视频"
+              }流失败: ${error.message}`,
+              "error"
+            );
+          };
+
+          subscriptionManager.onSubscriptionStateChanged = (
+            uid,
+            mediaType,
+            state
+          ) => {
+            console.log(
+              `[SUBSCRIPTION] 🔄 订阅状态变化: ${uid} (${mediaType}) -> ${state}`
+            );
+
+            // 更新UI显示
+            if (WebUIDValidator.isBotUser(uid) && mediaType === "audio") {
+              const stateText =
+                {
+                  not_subscribed: "未订阅",
+                  subscribing: "订阅中",
+                  subscribed: "已订阅",
+                  subscription_failed: "订阅失败",
+                  unsubscribing: "取消订阅中",
+                }[state] || state;
+
+              elements.remoteUid.textContent = `Bot(${uid}) - ${stateText}`;
+            }
+          };
+
+          console.log("[SUBSCRIPTION] 订阅管理器初始化完成，已设置回调函数");
+
+          // [DEBUG] 检查当前远端用户
+          console.log("[DEBUG] 当前远端用户:", client.remoteUsers);
+          console.log("[DEBUG] 远端用户数量:", client.remoteUsers.length);
+          client.remoteUsers.forEach((user) => {
+            console.log("[DEBUG] 远端用户详情:", {
+              uid: user.uid,
+              hasAudio: user.hasAudio,
+              hasVideo: user.hasVideo,
+            });
+          });
+
+          // [AUDIO_FLOW] 检查麦克风权限和设备
+          try {
+            const devices = await AgoraRTC.getDevices();
+            const audioInputs = devices.filter(
+              (device) => device.kind === "audioinput"
+            );
+            console.log(
+              "[AUDIO_FLOW] 可用音频输入设备:",
+              audioInputs.map((d) => ({ id: d.deviceId, label: d.label }))
+            );
+
+            if (audioInputs.length === 0) {
+              console.warn("[AUDIO_FLOW] 警告: 未检测到音频输入设备");
+            }
+          } catch (error) {
+            console.error("[AUDIO_FLOW] 获取音频设备失败:", error);
+          }
+
+          console.log("[AUDIO_FLOW] 开始创建麦克风音频轨道...");
+          localTrack = await AgoraRTC.createMicrophoneAudioTrack({
+            encoderConfig: {
+              sampleRate: 48000,
+              stereo: false,
+            },
+          });
+
+          // [AUDIO_FLOW] 音频轨道创建成功调试日志
+          console.log("[AUDIO_FLOW] 麦克风音频轨道已创建:", {
+            trackId: localTrack.getTrackId(),
+            enabled: localTrack.enabled,
+            muted: localTrack.muted,
+            sampleRate: 48000,
+          });
+
+          await client.publish(localTrack);
+
+          // [AUDIO_FLOW] 音频发布成功调试日志
+          console.log("[AUDIO_FLOW] 本地音频已发布到声网:", {
+            trackId: localTrack.getTrackId(),
+            published: true,
+            clientState: client.connectionState,
+          });
+
+          log("声网", "本地音频已发布");
+
+          // [AUDIO_FLOW] 添加音频数据处理器监听音频流
+          let audioFrameCounter = 0;
+          try {
+            const processor = {
+              process: (audioBuffer) => {
+                audioFrameCounter++;
+                if (audioFrameCounter % 100 === 0) {
+                  console.log(
+                    "[AUDIO_FLOW] 音频数据流经声网SDK (第" +
+                      audioFrameCounter +
+                      "帧):",
+                    {
+                      sampleRate: audioBuffer.sampleRate,
+                      numberOfChannels: audioBuffer.numberOfChannels,
+                      length: audioBuffer.length,
+                      timestamp: Date.now(),
+                    }
+                  );
+                }
+                return audioBuffer;
               },
             };
 
-            // 发送PCM数据
-            if (
-              this.connection &&
-              this.connection.readyState === WebSocket.OPEN
-            ) {
-              this.connection.send(JSON.stringify(message));
-
-              // 更新统计
-              stats.audioChunksSent++;
-              if (stats.audioChunksSent % 50 === 0) {
-                log(`📤 已发送${stats.audioChunksSent}个PCM音频块`, "info");
-              }
-            }
-          } catch (error) {
-            log(`PCM数据发送失败: ${error.message}`, "error");
-            stats.errors++;
-          }
-        }
-
-        async fallbackToMediaRecorder(stream) {
-          log("🔄 降级到MediaRecorder模式", "warning");
-
-          // 原有的MediaRecorder逻辑
-          const options = {
-            mimeType: "audio/webm;codecs=opus",
-            audioBitsPerSecond: 16000,
-          };
-
-          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            log("浏览器不支持WebM Opus格式，尝试其他格式", "warning");
-            const fallbackOptions = [
-              { mimeType: "audio/webm" },
-              { mimeType: "audio/ogg;codecs=opus" },
-              { mimeType: "audio/mp4" },
-            ];
-
-            let selectedOptions = null;
-            for (const option of fallbackOptions) {
-              if (MediaRecorder.isTypeSupported(option.mimeType)) {
-                selectedOptions = option;
-                log(`使用回退格式: ${option.mimeType}`, "info");
-                break;
-              }
-            }
-
-            this.mediaRecorder = selectedOptions
-              ? new MediaRecorder(stream, selectedOptions)
-              : new MediaRecorder(stream);
-          } else {
-            this.mediaRecorder = new MediaRecorder(stream, options);
-          }
-
-          this.mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              this.sendAudioChunk(event.data);
-            }
-          };
-
-          this.mediaRecorder.onerror = (event) => {
-            log(`音频录制错误: ${event.error}`, "error");
-            stats.errors++;
-          };
-
-          this.mediaRecorder.start(100);
-        }
-
-        async startRecording(stream) {
-          try {
-            // 使用PCM录制
-            await this.initPCMRecorder(stream);
-            log("🎤 PCM录制器初始化成功", "success");
-            this.isRecording = true;
-            log("🎤 WebSocket音频录制已启动");
-          } catch (error) {
-            log(`启动音频录制失败: ${error.message}`, "error");
-            stats.errors++;
-            throw error;
-          }
-        }
-
-        async sendAudioChunk(audioBlob) {
-          try {
-            if (
-              this.connection &&
-              this.connection.readyState === WebSocket.OPEN
-            ) {
-              // 转换为Base64
-              const arrayBuffer = await audioBlob.arrayBuffer();
-              const base64Data = btoa(
-                String.fromCharCode(...new Uint8Array(arrayBuffer))
-              );
-
-              const message = {
-                type: "audio_chunk",
-                data: base64Data,
-                timestamp: Date.now(),
-                sequence: this.sequenceNumber++,
-                client_id: "web_client_" + Date.now(),
-                format: "webm/opus", // 明确标识音频格式
-                sample_rate: 16000, // 明确标识采样率
-              };
-
-              this.connection.send(JSON.stringify(message));
-              stats.messagesSent++;
-            } else if (
-              this.connection &&
-              this.connection.readyState !== WebSocket.OPEN
-            ) {
-              log(
-                `WebSocket连接状态异常: ${this.connection.readyState}`,
-                "warning"
-              );
-            }
-          } catch (error) {
-            log(`发送音频数据失败: ${error.message}`, "error");
-            stats.errors++;
-          }
-        }
-
-        stop() {
-          // 停止PCM录制
-          if (this.isPCMRecording) {
-            this.isPCMRecording = false;
-
-            // 断开音频节点连接
-            if (this.sourceNode && this.processorNode) {
-              this.sourceNode.disconnect();
-              this.processorNode.disconnect();
-            }
-
-            // 关闭AudioContext
-            if (this.audioContext && this.audioContext.state !== "closed") {
-              this.audioContext.close();
-            }
-
-            log("🛑 PCM录制已停止");
-          }
-
-          // 停止MediaRecorder（降级模式）
-          if (this.mediaRecorder && this.isRecording) {
-            this.mediaRecorder.stop();
-            log("🛑 MediaRecorder录制已停止");
-          }
-
-          this.isRecording = false;
-        }
-      }
-
-      // 音频接收器类 - 使用单一Audio对象复用策略
-      class AudioReceiver {
-        constructor(connection) {
-          this.connection = connection;
-          this.audioQueue = [];
-          this.isPlaying = false;
-
-          // 🆕 单一Audio对象复用策略
-          this.globalAudio = null;
-          this.currentAudioUrl = null;
-
-          // 🆕 Web Audio API支持（苹果设备打断机制）
-          this.currentWebAudioSource = null;
-          this.isUsingWebAudio = false;
-
-          this.playbackSequence = 0;
-          this.retryCount = 0;
-          this.maxRetries = 3;
-        }
-
-        // 🆕 初始化全局Audio对象
-        async initGlobalAudio() {
-          if (!this.globalAudio) {
-            this.globalAudio = new Audio();
-
-            // 设置全局事件监听器
-            this.globalAudio.onended = () => {
-              this.cleanupCurrentAudio();
-              this.retryCount = 0;
-              log(`✅ 音频播放完成`);
-              // 继续播放下一个
-              this.playNextAudio();
-            };
-
-            this.globalAudio.onerror = (error) => {
-              log(`❌ 音频播放错误: ${error.message || error}`, "error");
-              this.handleAudioError(error);
-            };
-
-            this.globalAudio.onloadstart = () => {
-              log(`🎵 开始播放音频`, "info");
-            };
-
-            this.globalAudio.oncanplay = () => {
-              log(`📻 音频已准备就绪`);
-            };
-
-            // 苹果设备需要在用户手势中激活
-            if (isAppleDevice()) {
-              await this.activateAppleAudio();
-            }
-
-            log("✅ 全局Audio对象初始化完成", "success");
-          }
-        }
-
-        // 🆕 苹果设备音频权限激活 - 简化版本
-        async activateAppleAudio() {
-          try {
-            log("🍎 检查苹果设备音频权限状态...", "info");
-
-            // 如果已经激活过，直接返回
-            if (audioPermissionGranted) {
-              log("✅ 苹果设备音频权限已存在", "success");
-              return;
-            }
-
-            // 确保AudioContext处于运行状态
-            if (!audioContext) {
-              const AudioContextClass =
-                window.AudioContext || window.webkitAudioContext;
-              audioContext = new AudioContextClass();
-            }
-
-            if (audioContext.state === "suspended") {
-              await audioContext.resume();
-              log("✅ AudioContext已激活");
-            }
-
-            // 🎯 不在这里播放任何音频，只检查AudioContext状态
-            if (audioContext.state === "running") {
-              audioPermissionGranted = true;
-              log("✅ 苹果设备Web Audio API已准备就绪", "success");
+            if (localTrack.pipe && typeof localTrack.pipe === "function") {
+              localTrack.pipe(processor);
+              console.log("[AUDIO_FLOW] 音频处理器已添加到本地轨道");
             } else {
-              log("⚠️ AudioContext状态异常，将在播放时重试", "warning");
+              console.log(
+                "[AUDIO_FLOW] 本地轨道不支持pipe方法，尝试其他监听方式"
+              );
             }
           } catch (error) {
-            log(`苹果设备音频权限检查失败: ${error.message}`, "warning");
-            // 不抛出错误，让连接继续进行
-            log("⚠️ 将在实际播放时重试权限获取", "info");
+            console.log("[AUDIO_FLOW] 添加音频处理器失败:", error.message);
           }
-        }
 
-        // 🆕 苹果设备专用：Web Audio API播放MP3
-        async playMP3WithWebAudio(mp3Data, audioText) {
-          try {
-            log(`🍎 使用Web Audio API播放: "${audioText}"`, "info");
+          startMicMeter(localTrack);
 
-            // 确保AudioContext处于运行状态
-            if (!audioContext) {
-              const AudioContextClass =
-                window.AudioContext || window.webkitAudioContext;
-              audioContext = new AudioContextClass();
-            }
-
-            if (audioContext.state === "suspended") {
-              await audioContext.resume();
-              log("✅ AudioContext已恢复");
-            }
-
-            // 解码Base64 MP3数据
-            const binaryString = atob(mp3Data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-
-            // 使用Web Audio API解码MP3
-            const audioBuffer = await audioContext.decodeAudioData(
-              bytes.buffer
-            );
-
-            // 🎯 关键：停止之前的Web Audio播放（支持打断）
-            if (this.currentWebAudioSource) {
-              try {
-                this.currentWebAudioSource.stop();
-                log("🛑 停止之前的Web Audio播放", "info");
-              } catch (stopError) {
-                // 忽略已经停止的source的错误
+          // 处理 Autoplay 限制
+          AgoraRTC.onAutoplayFailed = () => {
+            console.warn("[WARN] Autoplay 被限制，创建恢复按钮");
+            const btn = document.createElement("button");
+            btn.innerText = "点击恢复 Bot 音频";
+            btn.style.padding = "12px";
+            btn.style.margin = "16px";
+            btn.style.background = "#48bb78";
+            btn.style.color = "#fff";
+            btn.style.borderRadius = "8px";
+            btn.onclick = () => {
+              if (remoteAudioTrack) {
+                remoteAudioTrack.play("remoteAudio");
+                console.log("[DEBUG] 用户点击后恢复播放成功");
               }
-            }
-
-            // 创建新的音频源
-            const source = audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
-
-            // 🎯 保存当前播放源（用于打断控制）
-            this.currentWebAudioSource = source;
-            this.isUsingWebAudio = true;
-
-            // 设置播放完成回调
-            source.onended = () => {
-              // 只有正常播放完成才继续下一个（被打断时不会触发）
-              if (this.currentWebAudioSource === source) {
-                this.currentWebAudioSource = null;
-                this.isUsingWebAudio = false;
-                this.retryCount = 0;
-                log(`✅ Web Audio API播放完成: "${audioText}"`);
-                // 继续播放下一个音频
-                this.playNextAudio();
-              }
+              btn.remove();
             };
+            document.body.appendChild(btn);
+          };
 
-            // 🎯 在真正播放时才获取权限
-            source.start();
-            log(`✅ Web Audio API播放开始`, "success");
+          // ?? 修复：在join之前注册事件监听，避免错过Bot的published事件
+          console.log("[DEBUG] 在join前注册所有事件监听");
 
-            // 标记权限已获得
-            audioPermissionGranted = true;
-          } catch (error) {
-            this.currentWebAudioSource = null;
-            this.isUsingWebAudio = false;
-            log(`Web Audio API播放失败: ${error.message}`, "error");
-            throw error;
-          }
-        }
+          // 用户加入事件 - 使用订阅管理器处理显式订阅
+          client.on("user-joined", async (user) => {
+            console.log("[EVENT] user-joined:", user.uid);
+            console.log("[EVENT] 用户加入详情:", {
+              uid: user.uid,
+              hasAudioTrack: !!user.audioTrack,
+              hasVideoTrack: !!user.videoTrack,
+            });
 
-        // 🆕 清理当前音频资源
-        cleanupCurrentAudio() {
-          if (this.currentAudioUrl) {
-            URL.revokeObjectURL(this.currentAudioUrl);
-            this.currentAudioUrl = null;
-          }
-        }
+            // 使用订阅管理器处理显式订阅
+            if (subscriptionManager && user.hasAudio) {
+              const isBot = WebUIDValidator.isBotUser(user.uid);
 
-        // 🆕 处理音频播放错误
-        handleAudioError(error) {
-          // 苹果设备特殊错误处理
-          if (isAppleDevice()) {
-            log(`🍎 苹果设备音频播放错误: ${error.message || error}`, "error");
+              try {
+                const success = await subscriptionManager.subscribeUser(
+                  user,
+                  "audio",
+                  {
+                    onSuccess: (user, mediaType) => {
+                      if (isBot) {
+                        console.log(
+                          "[SUBSCRIBE] 🤖 Bot用户音频订阅成功，准备播放"
+                        );
+                        log("Bot连接", `Bot用户 ${user.uid} 音频流已订阅`);
+                      }
+                    },
+                    onError: (user, mediaType, error) => {
+                      log(
+                        "订阅失败",
+                        `用户 ${user.uid} 音频订阅失败: ${error}`
+                      );
+                    },
+                  }
+                );
 
-            if (!audioPermissionGranted) {
-              log("💡 可能需要重新获取音频权限", "warning");
+                // 如果是Bot用户且订阅失败，启动自动重试
+                if (isBot && !success) {
+                  console.log(
+                    "[SUBSCRIBE] 🔄 Bot用户订阅失败，启动自动重试机制"
+                  );
+                  subscriptionManager.scheduleRetrySubscription(
+                    user,
+                    "audio",
+                    3
+                  );
+                }
+              } catch (error) {
+                console.error("[SUBSCRIBE] ❌ 订阅管理器处理失败:", error);
+                log("系统错误", `订阅管理器处理用户 ${user.uid} 失败`);
+              }
+            } else if (user.hasAudio) {
+              // 如果订阅管理器未初始化，回退到直接订阅
+              console.warn("[SUBSCRIBE] ⚠️ 订阅管理器未初始化，使用直接订阅");
+              try {
+                await client.subscribe(user, "audio");
+                console.log("[SUBSCRIBE] ✅ 直接订阅成功:", user.uid);
+              } catch (error) {
+                console.error("[SUBSCRIBE] ❌ 直接订阅失败:", error);
+              }
+            } else {
+              console.log("[SUBSCRIBE] ⚠️ 用户无音频流，跳过订阅:", user.uid);
+
+              // 如果是Bot用户但没有音频流，记录警告
+              if (WebUIDValidator.isBotUser(user.uid)) {
+                console.warn(
+                  "[SUBSCRIBE] ⚠️ Bot用户无音频流，可能存在发布问题"
+                );
+                log("警告", `Bot用户 ${user.uid} 加入但无音频流`);
+              }
             }
-          }
-
-          // 使用错误监控系统
-          errorMonitor.logError("audio", error, {
-            retryCount: this.retryCount,
-            queueLength: this.audioQueue.length,
-            isAppleDevice: isAppleDevice(),
-            audioPermissionGranted: audioPermissionGranted,
-            audioContextState: audioContext ? audioContext.state : "none",
           });
 
-          this.cleanupCurrentAudio();
-          stats.errors++;
+          // 用户发布事件
+          client.on("user-published", handleUserPublished);
 
-          // 重试机制
-          if (this.retryCount < this.maxRetries) {
-            this.retryCount++;
-            log(
-              `🔄 音频播放重试 (${this.retryCount}/${this.maxRetries})`,
-              "warning"
-            );
+          // 用户取消发布事件
+          client.on("user-unpublished", (user, mediaType) => {
+            console.log("[EVENT] user-unpublished:", user.uid, mediaType);
+            console.log("用户取消发布:", user.uid);
+            elements.remoteUid.textContent = "-";
+            log("取消发布", `UID ${user.uid} 取消发布音频`);
+          });
 
-            // 延迟重试
-            setTimeout(() => this.playNextAudio(), 500 * this.retryCount);
-          } else {
-            log("❌ 音频播放重试次数已达上限", "error");
-            this.retryCount = 0;
-            // 尝试播放下一个音频
-            setTimeout(() => this.playNextAudio(), 100);
-          }
-        }
+          // 处理用户离开频道
+          client.on("user-left", (user) => {
+            console.log("[EVENT] user-left:", user.uid);
+            console.log("用户离开:", user.uid);
+            elements.remoteUid.textContent = "-";
+            log("离开", `UID ${user.uid} 已离开`);
+          });
 
-        handleIncomingAudio(audioData, metadata = {}) {
-          try {
-            // 检查是否有音频数据
-            if (!metadata.has_audio || !audioData) {
-              // 没有音频数据，只显示文本回复
-              if (metadata.text) {
-                log(`🔊 AI文本回复: ${metadata.text}`, "success");
-              }
-              return;
-            }
+          client.on("connection-state-change", (cur, prev, reason) => {
+            log("声网", `连接状态: ${prev} -> ${cur} (${reason})`);
+          });
 
-            // 检测音频格式
-            const audioFormat = metadata.audio_format || "webm";
+          setConnectionState("online", "声网链路已建立，等待 Bot 音频...");
+          elements.disconnectButton.disabled = false;
+          log("系统", "连接完成，Bot 音频将自动播放");
 
-            // 🔍 调试日志：显示格式检测结果
-            log(
-              `🔍 [DEBUG] 音频格式检测: metadata.audio_format="${metadata.audio_format}", 最终格式="${audioFormat}"`,
-              "info"
-            );
+          // ?? 添加：定时检查频道内的远端用户（增强版）
+          setInterval(() => {
+            const remoteUsers = client.remoteUsers;
+            console.log("[CHECK] =========================");
+            console.log("[CHECK] 频道内远端用户总数:", remoteUsers.length);
 
-            if (audioFormat === "mp3") {
-              // 处理MP3音频（新格式）
-              log(`✅ [DEBUG] 调用handleMP3Audio方法`, "success");
-              this.handleMP3Audio(audioData, metadata);
+            if (remoteUsers.length === 0) {
+              console.log("[CHECK] ?? 频道内无远端用户");
             } else {
-              // 处理WebM音频（旧格式，保持兼容性）
-              log(`⚠️ [DEBUG] 调用handleWebMAudio方法`, "warning");
-              this.handleWebMAudio(audioData, metadata);
-            }
-          } catch (error) {
-            log(`音频处理异常: ${error.message}`, "error");
-            stats.errors++;
+              remoteUsers.forEach((user) => {
+                console.log(`[CHECK] 用户 ${user.uid}:`, {
+                  hasAudioTrack: !!user.audioTrack,
+                  hasVideoTrack: !!user.videoTrack,
+                  isPlaying: user.audioTrack?.isPlaying,
+                  audioTrackType: typeof user.audioTrack,
+                  audioTrackObject: user.audioTrack,
+                });
 
-            // 记录详细错误信息用于调试
-            errorMonitor.logError("audio", error, {
-              audioFormat: audioFormat,
-              hasAudioData: !!audioData,
-              metadataKeys: Object.keys(metadata),
-              queueLength: this.audioQueue.length,
-            });
-
-            // 如果有文本但音频处理失败，仍然显示文本回复
-            if (metadata.text) {
-              log(`🔊 AI文本回复: ${metadata.text}`, "success");
-            }
-          }
-        }
-
-        handleMP3Audio(audioData, metadata) {
-          try {
-            // 验证Base64数据
-            if (!audioData || typeof audioData !== "string") {
-              throw new Error("无效的MP3音频数据");
-            }
-
-            // 解码Base64 MP3数据
-            const binaryString = atob(audioData);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-
-            // 验证MP3文件头（简单检查）
-            if (
-              bytes.length < 3 ||
-              !(bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)
-            ) {
-              log("⚠️ MP3文件头验证失败，但仍尝试播放", "warning");
-            }
-
-            // 创建MP3 Blob
-            const audioBlob = new Blob([bytes], { type: "audio/mpeg" });
-
-            // 加入播放队列
-            this.audioQueue.push({
-              blob: audioBlob,
-              text: metadata.text,
-              timestamp: metadata.timestamp,
-              format: "mp3",
-              size: bytes.length,
-            });
-
-            log(
-              `📥 收到MP3音频回复: "${metadata.text}" (${bytes.length}字节)`,
-              "success"
-            );
-
-            // 如果没有正在播放，立即播放
-            if (!this.isPlaying) {
-              this.playNextAudio();
-            }
-          } catch (error) {
-            log(`MP3音频处理失败: ${error.message}`, "error");
-            stats.errors++;
-
-            // 降级显示文本
-            if (metadata.text) {
-              log(`🔊 AI文本回复: ${metadata.text}`, "success");
-            }
-          }
-        }
-
-        handleWebMAudio(audioData, metadata) {
-          try {
-            // 解码Base64 WebM数据（保持向后兼容）
-            const binaryString = atob(audioData);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-
-            // 创建音频对象
-            const audioItem = {
-              data: bytes,
-              metadata: metadata,
-              timestamp: Date.now(),
-              sequence: this.playbackSequence++,
-            };
-
-            // 添加到播放队列
-            this.audioQueue.push(audioItem);
-
-            // 记录音频传输日志（每10次记录一次，避免日志过多）
-            if (this.playbackSequence % 10 === 0) {
-              log(`📥 音频传输: WebSocket - 接收 - ${bytes.length}字节`);
-            }
-
-            // 如果当前没有播放，开始播放
-            if (!this.isPlaying) {
-              this.playNextAudio();
-            }
-
-            // 只在每10次音频回复时记录日志，避免日志过多
-            if (this.playbackSequence % 10 === 0) {
-              log("🔊 收到WebSocket音频回复，已加入播放队列");
-            }
-          } catch (error) {
-            log(`处理音频数据失败: ${error.message}`, "error");
-            stats.errors++;
-
-            // 如果是Base64解码错误，但有文本回复，仍然显示文本
-            if (error.message.includes("atob") && metadata.text) {
-              log(`🔊 AI文本回复: ${metadata.text}`, "success");
-            }
-          }
-        }
-
-        // 🔄 重构：使用全局Audio对象的播放逻辑
-        async playNextAudio() {
-          if (this.audioQueue.length === 0) {
-            this.isPlaying = false;
-            return;
-          }
-
-          // 确保全局Audio对象已初始化
-          if (!this.globalAudio) {
-            log("⚠️ 全局Audio对象未初始化，正在初始化...", "warning");
-            await this.initGlobalAudio();
-          }
-
-          this.isPlaying = true;
-          const audioItem = this.audioQueue.shift();
-
-          try {
-            let audioBlob;
-            let formatName;
-
-            // 根据音频格式创建正确的Blob
-            if (audioItem.format === "mp3") {
-              audioBlob = audioItem.blob;
-              formatName = "MP3";
-            } else {
-              audioBlob = new Blob([audioItem.data], { type: "audio/webm" });
-              formatName = "WebM";
-            }
-
-            // 清理之前的音频URL
-            this.cleanupCurrentAudio();
-
-            // 创建新的音频URL并设置到全局Audio对象
-            this.currentAudioUrl = URL.createObjectURL(audioBlob);
-            this.globalAudio.src = this.currentAudioUrl;
-
-            // 设置音频属性
-            this.globalAudio.preload = "auto";
-            if (isAppleDevice()) {
-              this.globalAudio.crossOrigin = "anonymous";
-            }
-
-            // 更新日志信息（包含文本内容）
-            const audioText = audioItem.text || "无文本";
-            log(`🎵 准备播放${formatName}音频: "${audioText}"`, "info");
-
-            // � 苹果设进备特殊处理：MP3使用Web Audio API
-            if (isAppleDevice() && audioItem.format === "mp3") {
-              log("🍎 苹果设备使用Web Audio API播放MP3", "info");
-
-              // 从Blob读取Base64数据
-              const reader = new FileReader();
-              reader.onload = async () => {
-                try {
-                  const base64Data = reader.result.split(",")[1]; // 移除data:audio/mpeg;base64,前缀
-                  await this.playMP3WithWebAudio(base64Data, audioText);
-                } catch (webAudioError) {
-                  log(
-                    `Web Audio API播放失败，降级到Audio元素: ${webAudioError.message}`,
-                    "warning"
+                if (user.audioTrack) {
+                  console.log(
+                    `[CHECK] ? 用户 ${user.uid} 有音频轨道，播放状态: ${user.audioTrack.isPlaying}`
                   );
-                  // 降级到Audio元素播放
-                  await this.globalAudio.play();
+                } else {
+                  console.log(`[CHECK] ? 用户 ${user.uid} 无音频轨道`);
                 }
-              };
-              reader.readAsDataURL(audioBlob);
-              return; // 提前返回，不执行下面的Audio元素播放
+
+                // 特别检查Bot UID - 使用UID验证器
+                if (WebUIDValidator.isBotUser(user.uid)) {
+                  console.log(
+                    `[CHECK] 🤖 检测到Bot用户 ${
+                      user.uid
+                    }! (类型: ${typeof user.uid})`
+                  );
+                  WebUIDValidator.logUIDInfo("Bot用户检测", user.uid, {
+                    hasAudioTrack: !!user.audioTrack,
+                    isPlaying: user.audioTrack?.isPlaying,
+                  });
+                  if (!user.audioTrack) {
+                    console.log(
+                      `[CHECK] ⚠️ Bot用户无音频轨道，可能需要手动订阅`
+                    );
+                  }
+                }
+              });
             }
-
-            // 🖥️ 非苹果设备或WebM格式：使用Audio元素播放
-            await this.globalAudio.play();
-            log(`✅ ${formatName}音频开始播放`, "success");
-          } catch (error) {
-            log(`音频播放失败: ${error.message}`, "error");
-
-            // 如果是权限问题且是苹果设备
-            if (
-              isAppleDevice() &&
-              (error.name === "NotAllowedError" ||
-                error.message.includes("not supported"))
-            ) {
-              log("🍎 苹果设备权限问题，尝试重新激活...", "warning");
-
-              try {
-                // 重新激活音频权限
-                await this.activateAppleAudio();
-                // 将当前音频重新加入队列头部
-                this.audioQueue.unshift(audioItem);
-                // 重试播放
-                setTimeout(() => this.playNextAudio(), 100);
-                return;
-              } catch (activateError) {
-                log(`权限重新激活失败: ${activateError.message}`, "error");
-              }
-            }
-
-            // 使用统一的错误处理
-            this.handleAudioError(error);
+            console.log("[CHECK] =========================");
+          }, 5000); // 每5秒检查一次
+        } catch (error) {
+          log("错误", `连接失败: ${error.message}`, "error");
+          await disconnect();
+        } finally {
+          isConnecting = false;
+          if (!elements.disconnectButton.disabled) {
+            elements.connectButton.disabled = true;
+          } else {
+            elements.connectButton.disabled = false;
           }
-        }
-
-        // 清空播放队列（用于打断）- 支持Web Audio API
-        clearQueue() {
-          const queueLength = this.audioQueue.length;
-          const wasPlaying = this.isPlaying;
-
-          // 🎯 停止Web Audio API播放（苹果设备）
-          if (this.currentWebAudioSource) {
-            try {
-              this.currentWebAudioSource.stop();
-              log("🛑 停止Web Audio API播放", "info");
-            } catch (stopError) {
-              // 忽略已经停止的source的错误
-            }
-            this.currentWebAudioSource = null;
-            this.isUsingWebAudio = false;
-          }
-
-          // 🎯 停止Audio元素播放（其他设备）
-          if (this.globalAudio) {
-            this.globalAudio.pause();
-            this.globalAudio.currentTime = 0;
-          }
-
-          // 清理音频资源
-          this.cleanupCurrentAudio();
-
-          // 清空队列
-          this.audioQueue = [];
-          this.isPlaying = false;
-
-          if (queueLength > 0 || wasPlaying) {
-            log(
-              `🛑 音频播放已打断，清空队列 (${queueLength}个待播放项目)`,
-              "info"
-            );
-          }
-        }
-
-        // 暂停当前播放 - 支持Web Audio API
-        pause() {
-          // 🎯 Web Audio API无法暂停，只能停止
-          if (this.isUsingWebAudio && this.currentWebAudioSource) {
-            try {
-              this.currentWebAudioSource.stop();
-              log("🛑 停止Web Audio API播放（无法暂停）", "info");
-            } catch (stopError) {
-              // 忽略错误
-            }
-            this.currentWebAudioSource = null;
-            this.isUsingWebAudio = false;
-          }
-
-          // 🎯 Audio元素可以暂停
-          if (this.globalAudio) {
-            this.globalAudio.pause();
-          }
-
-          this.isPlaying = false;
-        }
-
-        // 恢复播放 - Web Audio API限制说明
-        resume() {
-          // 🎯 Web Audio API无法恢复，只能重新播放下一个
-          if (this.isUsingWebAudio) {
-            log("⚠️ Web Audio API无法恢复播放，将播放下一个音频", "warning");
-            this.playNextAudio();
-            return;
-          }
-
-          // 🎯 Audio元素可以恢复
-          if (this.globalAudio && this.globalAudio.paused) {
-            this.globalAudio.play().catch((error) => {
-              log(`恢复播放失败: ${error.message}`, "error");
-            });
-            this.isPlaying = true;
-          }
-        }
-
-        // 🆕 停止播放并清理资源 - 支持Web Audio API
-        stop() {
-          // 🎯 停止Web Audio API
-          if (this.currentWebAudioSource) {
-            try {
-              this.currentWebAudioSource.stop();
-            } catch (stopError) {
-              // 忽略错误
-            }
-            this.currentWebAudioSource = null;
-            this.isUsingWebAudio = false;
-          }
-
-          // 🎯 停止Audio元素
-          if (this.globalAudio) {
-            this.globalAudio.pause();
-            this.globalAudio.currentTime = 0;
-            // 移除事件监听器
-            this.globalAudio.onended = null;
-            this.globalAudio.onerror = null;
-            this.globalAudio.onloadstart = null;
-            this.globalAudio.oncanplay = null;
-          }
-
-          this.cleanupCurrentAudio();
-          this.clearQueue();
-          this.globalAudio = null;
-          log("🛑 AudioReceiver已停止", "info");
-        }
-
-        // 处理音频控制指令
-        handleAudioControl(message) {
-          try {
-            const action = message.action;
-
-            switch (action) {
-              case "stop":
-                // 收到停止指令，立即清空队列和停止播放
-                this.clearQueue();
-                log("🛑 收到后端停止指令，音频播放已中断", "info");
-                break;
-              case "pause":
-                // 暂停当前播放
-                this.pause();
-                log("⏸️ 收到暂停指令", "info");
-                break;
-              case "resume":
-                // 恢复播放
-                this.resume();
-                log("▶️ 收到恢复播放指令", "info");
-                break;
-              default:
-                log(`⚠️ 未知的音频控制指令: ${action}`, "warning");
-            }
-          } catch (error) {
-            log(`音频控制处理失败: ${error.message}`, "error");
-          }
-        }
-
-        stop() {
-          this.clearQueue();
-          this.playbackSequence = 0;
         }
       }
 
-      // 错误监控和日志模块 - 简化为只支持WebSocket
-      class ErrorMonitor {
-        constructor() {
-          this.errorCounts = {
-            websocket: 0,
-            audio: 0,
-            pcm: 0,
-            mp3: 0,
-            tts: 0,
-          };
-          this.errorHistory = [];
-          this.maxHistorySize = 100;
-        }
+      async function disconnect() {
+        elements.connectButton.disabled = false;
+        elements.disconnectButton.disabled = true;
+        setConnectionState("offline", "连接已关闭，可随时重新加入频道");
 
-        logError(category, error, context = {}) {
-          const errorEntry = {
-            timestamp: Date.now(),
-            category: category,
-            message: error.message || error,
-            context: context,
-            stack: error.stack || null,
-          };
+        try {
+          client.off("user-published", handleUserPublished);
+          client.off("user-unpublished", handleUserUnpublished);
+          client.off("connection-state-change");
 
-          this.errorHistory.push(errorEntry);
-          if (this.errorHistory.length > this.maxHistorySize) {
-            this.errorHistory.shift();
+          if (remoteAudioTrack) {
+            remoteAudioTrack.stop();
+            remoteAudioTrack.close();
+            remoteAudioTrack = null;
           }
 
-          this.errorCounts[category] = (this.errorCounts[category] || 0) + 1;
-
-          // 详细错误日志
-          log(`❌ [${category.toUpperCase()}] ${errorEntry.message}`, "error");
-
-          // 如果有上下文信息，也记录
-          if (Object.keys(context).length > 0) {
-            log(`📋 错误上下文: ${JSON.stringify(context)}`, "info");
+          if (localTrack) {
+            localTrack.stop();
+            localTrack.close();
+            localTrack = null;
           }
-        }
 
-        getErrorSummary() {
-          return {
-            counts: this.errorCounts,
-            recentErrors: this.errorHistory.slice(-10),
-            totalErrors: this.errorHistory.length,
-          };
-        }
+          stopMicMeter();
 
-        clearHistory() {
-          this.errorHistory = [];
-          this.errorCounts = {
-            websocket: 0,
-            audio: 0,
-            pcm: 0,
-            mp3: 0,
-            tts: 0,
-          };
-          log("🧹 错误历史已清空", "info");
+          // 清理订阅管理器
+          if (subscriptionManager) {
+            subscriptionManager.destroy();
+            subscriptionManager = null;
+            console.log("[SUBSCRIPTION] 订阅管理器已清理");
+          }
+
+          if (client.connectionState !== "DISCONNECTED") {
+            await client.leave();
+          }
+          log("系统", "已离开声网频道");
+        } catch (error) {
+          log("错误", `断开连接出现问题: ${error.message}`);
         }
       }
 
-      // 全局错误监控实例
-      const errorMonitor = new ErrorMonitor();
+      async function handleUserPublished(user, mediaType) {
+        console.log(
+          "[SUBSCRIBE_FLOW] ?? Detected user publish:",
+          user.uid,
+          mediaType
+        );
+        console.log("[DEBUG] user-published:", user.uid, mediaType);
+        console.log("[SUBSCRIBE_FLOW] ?? User object before subscribe:", {
+          uid: user.uid,
+          hasAudioTrack: !!user.audioTrack,
+          hasVideoTrack: !!user.videoTrack,
+          userObject: user,
+        });
 
-      // 全局连接管理器实例
-      let connectionManager = new ConnectionManager();
-
-      // 事件监听器
-      elements.connectBtn.addEventListener("click", () =>
-        connectionManager.connect()
-      );
-      elements.disconnectBtn.addEventListener("click", () =>
-        connectionManager.disconnect()
-      );
-
-      // 日志函数
-      function log(message, type = "info") {
-        const timestamp = new Date().toLocaleTimeString();
-        const logEntry = document.createElement("div");
-        logEntry.className = `log-entry ${type}`;
-        logEntry.innerHTML = `
-          <span class="timestamp">[${timestamp}]</span> ${message}
-        `;
-        elements.logOutput.appendChild(logEntry);
-        elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
-        console.log(`[${type.toUpperCase()}] ${message}`);
-      }
-
-      // WebSocket自动重连调度
-      function scheduleWebSocketReconnect() {
-        if (websocketReconnecting) return;
-
-        websocketReconnecting = true;
-        reconnectAttempts++;
-
-        if (reconnectAttempts > maxReconnectAttempts) {
-          log(
-            `❌ WebSocket重连失败，已达到最大重试次数 (${maxReconnectAttempts})`,
-            "error"
-          );
-          websocketReconnecting = false;
-          reconnectAttempts = 0;
-
-          // 显示重连失败提示
-          elements.connectionStatus.textContent = "WebSocket重连失败";
-          elements.systemStatus.textContent = "连接异常";
+        if (mediaType !== "audio") {
+          console.log("[DEBUG] 非音频轨道，忽略");
           return;
         }
 
-        const delay = Math.min(
-          reconnectDelay * Math.pow(2, reconnectAttempts - 1),
-          30000
-        ); // 最大30秒
-        log(
-          `🔄 WebSocket将在 ${
-            delay / 1000
-          } 秒后重连 (第${reconnectAttempts}次尝试)`,
-          "warning"
-        );
-
-        setTimeout(async () => {
-          try {
-            log(
-              `🔄 开始WebSocket重连尝试 ${reconnectAttempts}/${maxReconnectAttempts}...`
-            );
-            await initWebSocket();
-
-            // 重连成功，重置计数器
-            reconnectAttempts = 0;
-            websocketReconnecting = false;
-            log("✅ WebSocket重连成功", "success");
-
-            // 如果是WebSocket音频模式，重新初始化音频处理
-            if (connectionManager.mode === "websocket") {
-              await connectionManager.switchToWebSocketMode();
-            }
-          } catch (error) {
-            log(`❌ WebSocket重连失败: ${error.message}`, "error");
-            websocketReconnecting = false;
-
-            // 继续下一次重连尝试
-            scheduleWebSocketReconnect();
-          }
-        }, delay);
-      }
-
-      // 初始化WebSocket连接
-      async function initWebSocket() {
         try {
-          websocket = new WebSocket(WS_URL);
+          console.log("[SUBSCRIBE_FLOW] ?? 开始订阅用户音频:", user.uid);
+          console.log(
+            '[SUBSCRIBE_FLOW] ?? 调用 client.subscribe(user, "audio")...'
+          );
 
-          websocket.onopen = () => {
-            log("WebSocket连接已建立");
-            elements.connectionStatus.textContent = "WebSocket已连接";
+          await client.subscribe(user, "audio");
 
-            // 发送绑定消息 - 苹果设备延迟50ms避免"伪open"问题
-            const bindMsg = {
-              type: "bind",
-              client_id: "web_client_" + Date.now(),
-              timestamp: Date.now(),
-            };
-            setTimeout(() => {
-              websocket.send(JSON.stringify(bindMsg));
-              log("已发送WebSocket绑定消息");
-            }, 50);
-          };
-
-          websocket.onmessage = (event) => {
-            try {
-              const message = JSON.parse(event.data);
-              handleWebSocketMessage(message);
-            } catch (e) {
-              log("WebSocket消息解析失败: " + e.message, "error");
-            }
-          };
-
-          websocket.onclose = (event) => {
-            log(
-              `WebSocket连接已关闭 (代码: ${event.code}, 原因: ${event.reason})`
-            );
-            elements.connectionStatus.textContent = "WebSocket已断开";
-
-            // 自动重连机制
-            if (
-              !websocketReconnecting &&
-              connectionManager.mode === "websocket"
-            ) {
-              scheduleWebSocketReconnect();
-            }
-          };
-
-          websocket.onerror = (error) => {
-            // 使用错误监控系统
-            errorMonitor.logError("websocket", error, {
-              url: WS_URL,
-              readyState: websocket ? websocket.readyState : "unknown",
-              mode: connectionManager.mode,
-            });
-            stats.errors++;
-
-            // 自动重连机制
-            if (
-              !websocketReconnecting &&
-              connectionManager.mode === "websocket"
-            ) {
-              scheduleWebSocketReconnect();
-            }
-          };
-        } catch (error) {
-          log("WebSocket初始化失败: " + error.message, "error");
-        }
-      }
-
-      // 处理WebSocket消息
-      function handleWebSocketMessage(message) {
-        log("收到WebSocket消息: " + message.type);
-        stats.messagesReceived++;
-
-        switch (message.type) {
-          case "bind_confirm":
-            log("WebSocket绑定确认", "success");
-            break;
-          case "interrupt_signal":
-            log("收到打断信号", "warning");
-            // 立即清空音频播放队列
-            if (connectionManager.audioReceiver) {
-              connectionManager.audioReceiver.clearQueue();
-              log("🛑 根据后端打断信号清空音频队列", "info");
-            }
-            break;
-          case "audio_response":
-            // 处理WebSocket音频回复
-            if (connectionManager.audioReceiver) {
-              const metadata = {
-                text: message.text,
-                timestamp: message.timestamp,
-                sequence: message.sequence,
-                has_audio: message.has_audio || false,
-                audio_format: message.audio_format || "webm", // 🔧 修复：包含音频格式字段
-              };
-
-              // 只有当有音频数据时才传递data字段
-              const audioData = message.has_audio ? message.data : null;
-
-              connectionManager.audioReceiver.handleIncomingAudio(
-                audioData,
-                metadata
-              );
-            } else if (message.text) {
-              // 如果没有音频接收器但有文本，直接显示文本
-              log(`🔊 AI回复: ${message.text}`, "success");
-            }
-            break;
-          case "audio_control":
-            // 处理音频控制指令（打断机制）
-            if (connectionManager.audioReceiver) {
-              connectionManager.audioReceiver.handleAudioControl(message);
-            }
-            break;
-          // 注意：AI音频回复使用WebSocket传输模式
-        }
-      }
-
-      // 连接到服务器 - 简化为只使用WebSocket
-      async function connectToServer() {
-        try {
-          log("开始连接到WebSocket服务器...");
-          elements.connectBtn.disabled = true;
-          elements.systemStatus.textContent = "连接中...";
-
-          // 检查浏览器兼容性
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error("浏览器不支持音频录制");
-          }
-
-          // 初始化WebSocket
-          await initWebSocket();
-
-          // 获取用户媒体
-          log("请求麦克风权限...");
-          localStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              sampleRate: 16000,
-            },
-            video: false,
+          console.log("[SUBSCRIBE_FLOW] ? subscribe() 调用完成，检查结果...");
+          console.log("[SUBSCRIBE_FLOW] ?? User object after subscribe:", {
+            uid: user.uid,
+            hasAudioTrack: !!user.audioTrack,
+            audioTrackType: typeof user.audioTrack,
+            audioTrackObject: user.audioTrack,
           });
 
-          log("✅ 麦克风权限获取成功");
-          elements.audioStatus.textContent = "已激活";
-          elements.audioStatus.className = "status-value success";
-
-          // 初始化音频可视化
-          initAudioVisualization();
-
-          elements.connectionStatus.textContent = "WebSocket已连接";
-
-          elements.systemStatus.textContent = "已连接";
-          elements.disconnectBtn.disabled = false;
-          log("✅ WebSocket服务器连接成功！", "success");
-          stats.startTime = Date.now();
-        } catch (error) {
-          log(`❌ 连接失败: ${error.message}`, "error");
-          elements.connectBtn.disabled = false;
-          elements.systemStatus.textContent = "连接失败";
-          stats.errors++;
-        }
-      }
-
-      // 断开连接 - 简化为只处理WebSocket
-      async function disconnectFromServer() {
-        try {
-          log("正在断开连接...");
-
-          // 清理音频可视化
-          cleanupAudioVisualization();
-
-          // 停止本地流
-          if (localStream) {
-            localStream.getTracks().forEach((track) => track.stop());
-            localStream = null;
-          }
-
-          // 关闭WebSocket
-          if (websocket) {
-            websocket.close();
-            websocket = null;
-          }
-
-          // 重置UI状态
-          elements.connectBtn.disabled = false;
-          elements.disconnectBtn.disabled = true;
-
-          elements.audioStatus.textContent = "未激活";
-          elements.audioStatus.className = "status-value";
-          elements.connectionStatus.textContent = "WebSocket已连接";
-          elements.systemStatus.textContent = "已断开";
-          elements.latency.textContent = "-- ms";
-
-          log("✅ 已断开连接", "success");
-        } catch (error) {
-          log(`❌ 断开连接时出错: ${error.message}`, "error");
-        }
-      }
-
-      // 初始化音频可视化
-      function initAudioVisualization() {
-        try {
-          // 确保localStream存在
-          if (!localStream) {
-            log("⚠️ 无本地音频流，跳过可视化", "warning");
+          if (!user.audioTrack) {
+            console.error("[SUBSCRIBE_FLOW] ? 订阅后 audioTrack 仍为空！");
+            log("错误", `订阅 ${user.uid} 后 audioTrack 为空`);
             return;
           }
 
-          // 苹果保险做法：直接重建整个上下文
-          if (audioContext) {
-            audioContext.close();
+          console.log(
+            "[SUBSCRIBE_FLOW] ? 订阅成功，获得 audioTrack:",
+            user.uid
+          );
+          remoteAudioTrack = user.audioTrack;
+
+          // 尝试直接播放
+          try {
+            console.log("[SUBSCRIBE_FLOW] ?? 尝试播放到 remoteAudio 元素...");
+            remoteAudioTrack.play("remoteAudio");
+            console.log("[SUBSCRIBE_FLOW] ? play() 调用成功");
+          } catch (err) {
+            console.warn(
+              "[SUBSCRIBE_FLOW] ?? play() 调用失败，可能被 autoplay 限制:",
+              err
+            );
           }
-          const AudioContextClass =
-            window.AudioContext || window.webkitAudioContext;
-          audioContext = new AudioContextClass({ sampleRate: 16000 });
 
-          // 创建新的analyser
-          analyser = audioContext.createAnalyser();
-          analyser.fftSize = 256;
+          // 设置音量
+          const volume = Number(elements.volumeSlider.value);
+          remoteAudioTrack.setVolume(volume);
+          console.log("[SUBSCRIBE_FLOW] ?? 设置音量:", volume);
 
-          // 创建新的音频源节点并连接
-          audioSourceNode = audioContext.createMediaStreamSource(localStream);
-          audioSourceNode.connect(analyser);
+          // 打印用户 UID
+          elements.remoteUid.textContent = user.uid || "-";
+          log("Bot", `UID ${user.uid} 音频已接入`);
 
-          const bufferLength = analyser.frequencyBinCount;
-          dataArray = new Uint8Array(bufferLength);
-
-          drawAudioVisualization();
-          log("🎵 音频可视化已启动");
+          // 周期性打印音频统计数据
+          if (remoteAudioTrack.getStats) {
+            setInterval(() => {
+              const stats = remoteAudioTrack.getStats();
+              console.log("[AUDIO_STATS]", {
+                uid: user.uid,
+                bitrate: stats?.receiveBitrate,
+                packets: stats?.receivePackets,
+                lossRate: stats?.receivePacketsLost,
+                codec: stats?.codecType,
+                isPlaying: remoteAudioTrack?.isPlaying,
+              });
+            }, 3000);
+          }
         } catch (error) {
-          log(`音频可视化初始化失败: ${error.message}`, "warning");
+          console.error("[SUBSCRIBE_FLOW] ? 订阅过程中发生错误:", error);
+          console.error("[SUBSCRIBE_FLOW] ?? 错误详情:", {
+            message: error.message,
+            code: error.code,
+            stack: error.stack,
+          });
+          log("错误", `无法订阅 Bot 音频: ${error.message}`);
         }
       }
 
-      // 清理音频可视化
-      function cleanupAudioVisualization() {
-        if (animationId) {
-          cancelAnimationFrame(animationId);
-          animationId = null;
-        }
-
-        // 断开并清理音频源节点
-        if (audioSourceNode) {
-          audioSourceNode.disconnect();
-          audioSourceNode = null;
-        }
-
-        // 断开并清理分析器节点
-        if (analyser) {
-          analyser.disconnect();
-          analyser = null;
-        }
-
-        dataArray = null;
-
-        // 清空电平显示
-        if (elements.audioLevel) {
-          elements.audioLevel.textContent = "0%";
-        }
-
-        // 清空画布
-        if (elements.audioCanvas) {
-          const canvasCtx = elements.audioCanvas.getContext("2d");
-          canvasCtx.clearRect(
-            0,
-            0,
-            elements.audioCanvas.width,
-            elements.audioCanvas.height
-          );
-        }
-
-        log("🎵 音频可视化已清理");
-      }
-
-      // 绘制音频可视化
-      function drawAudioVisualization() {
-        if (!analyser || !dataArray) return;
-
-        animationId = requestAnimationFrame(drawAudioVisualization);
-
-        analyser.getByteFrequencyData(dataArray);
-
-        const canvas = elements.audioCanvas;
-        const canvasCtx = canvas.getContext("2d");
-        const WIDTH = canvas.width;
-        const HEIGHT = canvas.height;
-
-        canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
-
-        const barWidth = (WIDTH / dataArray.length) * 2.5;
-        let barHeight;
-        let x = 0;
-
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
-        }
-        const average = sum / dataArray.length;
-        elements.audioLevel.textContent = Math.round(average) + "%";
-
-        for (let i = 0; i < dataArray.length; i++) {
-          barHeight = (dataArray[i] / 255) * canvas.height;
-
-          const gradient = canvasCtx.createLinearGradient(
-            0,
-            canvas.height - barHeight,
-            0,
-            canvas.height
-          );
-          gradient.addColorStop(0, "#4299e1");
-          gradient.addColorStop(1, "#3182ce");
-
-          canvasCtx.fillStyle = gradient;
-          canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-
-          x += barWidth + 1;
+      function handleUserUnpublished(user, mediaType) {
+        if (mediaType === "audio" && remoteAudioTrack) {
+          remoteAudioTrack.stop();
+          remoteAudioTrack.close();
+          remoteAudioTrack = null;
+          elements.remoteUid.textContent = "-";
+          log("Bot", `UID ${user.uid} 已离开频道`);
         }
       }
 
-      // 更新统计信息
-      function updateStats() {
-        if (stats.startTime) {
-          const uptime = Date.now() - stats.startTime;
-          // 这里可以添加更多统计信息的更新
-        }
-        setTimeout(updateStats, 1000);
-      }
+      elements.connectButton.addEventListener("click", connect);
+      elements.disconnectButton.addEventListener("click", disconnect);
 
-      // 全局错误处理器
-      window.addEventListener("error", (event) => {
-        log(`全局错误: ${event.error?.message || event.message}`, "error");
-        stats.errors++;
-
-        // 记录错误信息
-        if (event.error) {
-          log(`错误建议: 请检查网络连接或刷新页面重试`, "info");
+      elements.volumeSlider.addEventListener("input", (event) => {
+        const volume = Number(event.target.value || "70");
+        elements.remoteVolume.textContent = `${volume}%`;
+        if (remoteAudioTrack) {
+          remoteAudioTrack.setVolume(volume);
         }
       });
 
-      window.addEventListener("unhandledrejection", (event) => {
-        log(`未处理的Promise拒绝: ${event.reason}`, "error");
-        stats.errors++;
-
-        // 阻止默认的控制台错误输出
-        event.preventDefault();
-      });
-
-      // 苹果设备音频权限预处理 - 简化版本
-      function setupAppleDeviceAudioSupport() {
-        if (isAppleDevice()) {
-          log("🍎 检测到苹果设备，设置音频权限策略...", "info");
-
-          // 简单的用户交互监听器，只激活AudioContext
-          const activateAudioOnInteraction = async (event) => {
-            try {
-              if (!audioPermissionGranted) {
-                log("🔧 用户交互触发，激活AudioContext...", "info");
-
-                // 只激活AudioContext，不尝试播放Audio元素
-                if (!audioContext) {
-                  const AudioContextClass =
-                    window.AudioContext || window.webkitAudioContext;
-                  audioContext = new AudioContextClass();
-                }
-
-                if (audioContext.state === "suspended") {
-                  await audioContext.resume();
-                  log("✅ AudioContext已激活");
-                }
-
-                // 标记为已激活
-                audioPermissionGranted = true;
-
-                // 隐藏提示
-                const hint = document.getElementById("appleAudioHint");
-                if (hint) {
-                  hint.style.display = "none";
-                }
-
-                // 移除监听器
-                document.removeEventListener(
-                  "click",
-                  activateAudioOnInteraction
-                );
-                document.removeEventListener(
-                  "touchstart",
-                  activateAudioOnInteraction
-                );
-
-                log("✅ 苹果设备音频系统已激活", "success");
-              }
-            } catch (error) {
-              log(`音频系统激活失败: ${error.message}`, "error");
-            }
-          };
-
-          // 显示苹果设备提示
-          const hint = document.getElementById("appleAudioHint");
-          if (hint) {
-            hint.style.display = "block";
-            hint.style.cursor = "pointer";
-            hint.onclick = activateAudioOnInteraction;
-          }
-
-          // 添加交互监听器
-          document.addEventListener("click", activateAudioOnInteraction);
-          document.addEventListener("touchstart", activateAudioOnInteraction);
-
-          log("🔔 苹果设备音频支持已设置，请点击页面激活音频权限", "info");
+      window.addEventListener("beforeunload", () => {
+        if (client.connectionState !== "DISCONNECTED") {
+          client.leave();
         }
-      }
-
-      // 初始化
-      document.addEventListener("DOMContentLoaded", () => {
-        log("页面加载完成，初始化系统...");
-
-        // 设置苹果设备音频支持
-        setupAppleDeviceAudioSupport();
-
-        // 初始化WebSocket连接
-        initWebSocket();
-        updateStats();
       });
+
+      log("系统", "页面加载完成，点击按钮即可体验声网 RTC 链路。");
     </script>
   </body>
 </html>

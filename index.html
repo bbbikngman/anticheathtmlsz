@@ -298,6 +298,7 @@
       let micDataArray = null;
       let meterAnimation = null;
       let remoteUsersCheckTimer = null;
+      let audioStatsTimer = null;
 
       const elements = {
         connectionStatus: document.getElementById("connectionStatus"),
@@ -460,16 +461,6 @@
       async function handleUserJoined(user) {
         console.log("[EVENT] user-joined:", user.uid);
         log("加入", `UID ${user.uid} 已加入`);
-        
-        // 使用订阅管理器处理新用户
-        if (subscriptionManager && WebUIDValidator.isBotUser(user.uid)) {
-          console.log(`[SUBSCRIPTION] 🤖 检测到Bot用户加入: ${user.uid}`);
-          try {
-            await subscriptionManager.subscribeToUser(user.uid, ["audio"]);
-          } catch (error) {
-            console.error(`[SUBSCRIPTION] Bot用户订阅失败:`, error);
-          }
-        }
       }
 
       async function leaveAndCleanup() {
@@ -609,19 +600,22 @@
           try {
             const users = client.remoteUsers || [];
             for (const u of users) {
-              // hasAudio / audioTrack 任一为真就尝试一次
-              if (u.hasAudio || u.audioTrack) {
+              const track = u.audioTrack;
+              if (track) {
+                // 已订阅：只做播放与音量设置
+                track.play();
+                track.setVolume(Number(elements.volumeSlider.value || "70"));
+                elements.remoteUid.textContent = u.uid || "-";
+                log("订阅", `补播放：UID ${u.uid}（已有音轨）`);
+              } else if (u.hasAudio) {
+                // 未订阅：再去订阅一次
                 try {
                   await client.subscribe(u, "audio");
-                  const track = u.audioTrack;
-                  if (track) {
-                    track.play();  // 不传容器，更稳
-                    const volume = Number(elements.volumeSlider.value || "70");
-                    track.setVolume(volume);
+                  if (u.audioTrack) {
+                    u.audioTrack.play();
+                    u.audioTrack.setVolume(Number(elements.volumeSlider.value || "70"));
                     elements.remoteUid.textContent = u.uid || "-";
                     log("订阅", `补订阅成功：UID ${u.uid}（音频）`);
-                  } else {
-                    console.warn("[CATCHUP] 订阅后 audioTrack 仍为空：", u.uid);
                   }
                 } catch (e) {
                   console.warn("[CATCHUP] 补订阅失败：", u.uid, e);
@@ -637,7 +631,7 @@
           subscriptionManager = new WebSubscriptionManager(client, {
             maxRetryAttempts: 3,
             retryDelay: 2000,
-            enableAutoSubscribe: true,
+            enableAutoSubscribe: false, // 交由我们手动订阅
             logLevel: "info",
           });
           // 注意：WebSubscriptionManager不需要initialize方法，构造函数已完成初始化
@@ -740,12 +734,24 @@
           }
 
           console.log("[AUDIO_FLOW] 开始创建麦克风音频轨道...");
-          microphoneAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-            encoderConfig: {
-              sampleRate: 48000,
-              stereo: false,
-            },
-          });
+          try {
+            microphoneAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+              encoderConfig: {
+                sampleRate: 48000,
+                stereo: false,
+              },
+            });
+          } catch (e) {
+            const map = {
+              PERMISSION_DENIED: "用户未授权麦克风访问或系统拦截",
+              DEVICE_NOT_FOUND: "未找到可用的音频输入设备",
+              MEDIA_OPTION_INVALID: "指定采集参数在该设备/浏览器不可用",
+              CONSTRAINT_NOT_SATISFIED: "浏览器不支持当前采集约束",
+            };
+            log("错误", `创建麦克风失败：${map[e?.code] || e?.message || e}`, "error");
+            setConnectionState("offline", "麦克风不可用，无法开始对话");
+            throw e;
+          }
           localTrack = microphoneAudioTrack; // 保持兼容性
 
           // [AUDIO_FLOW] 音频轨道创建成功调试日志
@@ -818,6 +824,7 @@
               if (remoteAudioTrack) {
                 remoteAudioTrack.play();  // 让 SDK 自建隐藏 <audio>，最稳
                 console.log("[DEBUG] 用户点击后恢复播放成功");
+                elements.statusHint.textContent = "Bot 音频已恢复播放";
               }
               btn.remove();
             };
@@ -827,65 +834,7 @@
           // ?? 修复：在join之前注册事件监听，避免错过Bot的published事件
           console.log("[DEBUG] 在join前注册所有事件监听");
 
-          // 用户加入事件 - 使用订阅管理器处理显式订阅
-          client.on("user-joined", async (user) => {
-            console.log("[EVENT] user-joined:", user.uid);
-            console.log("[EVENT] 用户加入详情:", {
-              uid: user.uid,
-              hasAudioTrack: !!user.audioTrack,
-              hasVideoTrack: !!user.videoTrack,
-            });
 
-            // 使用订阅管理器处理显式订阅
-            if (subscriptionManager && user.hasAudio) {
-              const isBot = WebUIDValidator.isBotUser(user.uid);
-
-              try {
-                const success = await subscriptionManager.subscribeToUser(
-                  user.uid,
-                  "audio"
-                );
-                
-                // 订阅结果处理（成功/失败回调已在实例级别设置）
-                if (success && isBot) {
-                  console.log(
-                    "[SUBSCRIBE] 🤖 Bot用户音频订阅成功，准备播放"
-                  );
-                  log("Bot连接", `Bot用户 ${user.uid} 音频流已订阅`);
-                }
-
-                // 如果是Bot用户且订阅失败，启动自动重试
-                if (isBot && !success) {
-                  console.log(
-                    "[SUBSCRIBE] 🔄 Bot用户订阅失败，重试机制已自动启动"
-                  );
-                  // 注意：WebSubscriptionManager 内置重试机制，无需手动调度
-                }
-              } catch (error) {
-                console.error("[SUBSCRIBE] ❌ 订阅管理器处理失败:", error);
-                log("系统错误", `订阅管理器处理用户 ${user.uid} 失败`);
-              }
-            } else if (user.hasAudio) {
-              // 如果订阅管理器未初始化，回退到直接订阅
-              console.warn("[SUBSCRIBE] ⚠️ 订阅管理器未初始化，使用直接订阅");
-              try {
-                await client.subscribe(user, "audio");
-                console.log("[SUBSCRIBE] ✅ 直接订阅成功:", user.uid);
-              } catch (error) {
-                console.error("[SUBSCRIBE] ❌ 直接订阅失败:", error);
-              }
-            } else {
-              console.log("[SUBSCRIBE] ⚠️ 用户无音频流，跳过订阅:", user.uid);
-
-              // 如果是Bot用户但没有音频流，记录警告
-              if (WebUIDValidator.isBotUser(user.uid)) {
-                console.warn(
-                  "[SUBSCRIBE] ⚠️ Bot用户无音频流，可能存在发布问题"
-                );
-                log("警告", `Bot用户 ${user.uid} 加入但无音频流`);
-              }
-            }
-          });
 
 
 
@@ -973,6 +922,11 @@
             remoteUsersCheckTimer = null;
           }
 
+          if (audioStatsTimer) {
+            clearInterval(audioStatsTimer);
+            audioStatsTimer = null;
+          }
+
           if (remoteAudioTrack) {
             remoteAudioTrack.stop();
             remoteAudioTrack.close();
@@ -1019,6 +973,16 @@
 
         if (mediaType !== "audio") {
           console.log("[DEBUG] 非音频轨道，忽略");
+          return;
+        }
+
+        // 已有音轨就直接播放/调音量，避免重复订阅
+        if (user.audioTrack) {
+          remoteAudioTrack = user.audioTrack;
+          try { remoteAudioTrack.play(); } catch {}
+          remoteAudioTrack.setVolume(Number(elements.volumeSlider.value));
+          elements.remoteUid.textContent = user.uid || "-";
+          log("Bot", `UID ${user.uid} 音频已接入（已存在音轨）`);
           return;
         }
 
@@ -1073,7 +1037,8 @@
 
           // 周期性打印音频统计数据
           if (remoteAudioTrack.getStats) {
-            setInterval(() => {
+            if (audioStatsTimer) clearInterval(audioStatsTimer);
+            audioStatsTimer = setInterval(() => {
               const stats = remoteAudioTrack.getStats();
               console.log("[AUDIO_STATS]", {
                 uid: user.uid,
@@ -1101,6 +1066,10 @@
           remoteAudioTrack.stop();
           remoteAudioTrack.close();
           remoteAudioTrack = null;
+          if (audioStatsTimer) {
+            clearInterval(audioStatsTimer);
+            audioStatsTimer = null;
+          }
           elements.remoteUid.textContent = "-";
           log("Bot", `UID ${user.uid} 已离开频道`);
         }

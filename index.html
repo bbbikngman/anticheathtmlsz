@@ -287,6 +287,7 @@
     <script>
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       let localTrack = null;
+      let microphoneAudioTrack = null; // 添加缺失的变量定义
       let remoteAudioTrack = null;
       let agoraConfigCache = null;
       const backendBaseUrl = "https://cityuantifraud.cn";
@@ -442,48 +443,122 @@
         }
       }
 
-      async function connect() {
+      // 竞争性单通道相关变量
+      const CHANNEL = "solidchannel";
+      const API_BASE_URL = "https://cityuantifraud.cn"; // 后端API基础URL
+      let sessionId, token, uid, appId;
+      let beatTimer;
+
+      async function leaveAndCleanup() {
+        try {
+          if (client && client.connectionState !== "DISCONNECTED") {
+            await client.leave();
+            log("声网", "已离开频道");
+          }
+        } catch(e) {
+          console.error("离开频道失败:", e);
+        }
+        
+        try {
+          if (sessionId) {
+            // sendBeacon 确保页面关闭时也能发出
+            const leaveUrl = `${API_BASE_URL}/rtc/leave`;
+            navigator.sendBeacon(leaveUrl, new Blob([JSON.stringify({channel:CHANNEL, sessionId})], {type:"application/json"}));
+            log("系统", "已释放房间锁");
+          }
+        } catch(e) {
+          console.error("释放房间锁失败:", e);
+        }
+        
+        clearInterval(beatTimer); 
+        beatTimer = null;
+        sessionId = token = uid = appId = null;
+        
+        // 清理音频轨道
+        if (microphoneAudioTrack) {
+          microphoneAudioTrack.close();
+          microphoneAudioTrack = null;
+        }
+        
+        setConnectionState("offline", "已断开连接");
+        elements.connectButton.disabled = false;
+        isConnecting = false;
+      }
+
+      async function enterAndJoin() {
         if (isConnecting) {
           return;
         }
         isConnecting = true;
-        setConnectionState("idle", "正在初始化声网通道...");
+        setConnectionState("idle", "正在申请进入房间...");
         elements.connectButton.disabled = true;
-        log("系统", "准备连接声网 RTC...");
+        log("系统", "申请进入房间（竞争性获取锁）...");
 
         try {
-          const config = await fetchAgoraConfig("publisher");
-          console.log("[DEBUG] 获取到的Agora配置:", {
-            appId: config.appId,
-            channel: config.channel,
-            uid: config.uid,
-            botUid: config.botUid,
-            token: config.token
-              ? `${config.token.substring(0, 20)}...`
-              : "null",
+          // 1) 申请进入（拿锁+拿token）
+          const enterUrl = `${API_BASE_URL}/rtc/enter`;
+          console.log("请求URL:", enterUrl);
+          const response = await fetch(enterUrl, {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({ channel: CHANNEL })
           });
-          elements.localUid.textContent = config.uid || "-";
-          elements.channelName.textContent = config.channel || "-";
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const r = await response.json();
 
+          if (!r.ok) {
+            if (r.reason === "BUSY") {
+              alert("当前线路正忙，请稍后再试。");
+              log("系统", "房间被占用，无法进入", "error");
+            } else {
+              alert(`进入房间失败: ${r.reason}`);
+              log("系统", `进入房间失败: ${r.reason}`, "error");
+            }
+            setConnectionState("offline", "进入房间失败");
+            elements.connectButton.disabled = false;
+            isConnecting = false;
+            return;
+          }
+
+          sessionId = r.sessionId; 
+          token = r.token; 
+          uid = r.uid; 
+          appId = r.appId;
+          
+          log("系统", `成功获取房间锁，会话ID: ${sessionId}`);
+          elements.localUid.textContent = uid || "-";
+          elements.channelName.textContent = CHANNEL;
+
+          // 2) 心跳（10s一次）——断网/崩溃后 25s 自动释放
+          beatTimer = setInterval(()=> {
+            const beatUrl = `${API_BASE_URL}/rtc/beat`;
+            navigator.sendBeacon(beatUrl, new Blob([JSON.stringify({channel:CHANNEL, sessionId})], {type:"application/json"}));
+          }, 10000);
+
+          setConnectionState("idle", "正在加入声网频道...");
+          
           if (client.connectionState !== "DISCONNECTED") {
             await client.leave().catch(() => {});
           }
 
-          await client.join(
-            config.appId,
-            config.channel,
-            config.token || null,
-            config.uid || null
-          );
-          log("声网", `已加入频道 ${config.channel}`);
+          // 3) 加入频道
+          await client.join(appId, CHANNEL, token, uid);
+          log("声网", `已加入频道 ${CHANNEL}`);
 
-          // 初始化订阅管理器 - 声网技术支持建议：显式订阅确保兼容性
+          // 4) 初始化订阅管理器（监听Bot用户）
+          const config = await fetchAgoraConfig("publisher"); // 获取botUid
           subscriptionManager = new WebSubscriptionManager(client, {
             maxRetryAttempts: 3,
             retryDelay: 2000,
             enableAutoSubscribe: true,
             logLevel: "info",
           });
+          // 注意：WebSubscriptionManager不需要initialize方法，构造函数已完成初始化
+          // subscriptionManager.setSubscriptionCallback(handleSubscription); // 此方法也不存在，使用回调属性代替
 
           // 设置订阅管理器回调
           subscriptionManager.onSubscriptionSuccess = (
@@ -582,26 +657,27 @@
           }
 
           console.log("[AUDIO_FLOW] 开始创建麦克风音频轨道...");
-          localTrack = await AgoraRTC.createMicrophoneAudioTrack({
+          microphoneAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
             encoderConfig: {
               sampleRate: 48000,
               stereo: false,
             },
           });
+          localTrack = microphoneAudioTrack; // 保持兼容性
 
           // [AUDIO_FLOW] 音频轨道创建成功调试日志
           console.log("[AUDIO_FLOW] 麦克风音频轨道已创建:", {
-            trackId: localTrack.getTrackId(),
-            enabled: localTrack.enabled,
-            muted: localTrack.muted,
+            trackId: microphoneAudioTrack.getTrackId(),
+            enabled: microphoneAudioTrack.enabled,
+            muted: microphoneAudioTrack.muted,
             sampleRate: 48000,
           });
 
-          await client.publish(localTrack);
+          await client.publish(microphoneAudioTrack);
 
           // [AUDIO_FLOW] 音频发布成功调试日志
           console.log("[AUDIO_FLOW] 本地音频已发布到声网:", {
-            trackId: localTrack.getTrackId(),
+            trackId: microphoneAudioTrack.getTrackId(),
             published: true,
             clientState: client.connectionState,
           });
@@ -643,7 +719,7 @@
             console.log("[AUDIO_FLOW] 添加音频处理器失败:", error.message);
           }
 
-          startMicMeter(localTrack);
+          startMicMeter(microphoneAudioTrack);
 
           // 处理 Autoplay 限制
           AgoraRTC.onAutoplayFailed = () => {
@@ -682,37 +758,25 @@
               const isBot = WebUIDValidator.isBotUser(user.uid);
 
               try {
-                const success = await subscriptionManager.subscribeUser(
-                  user,
-                  "audio",
-                  {
-                    onSuccess: (user, mediaType) => {
-                      if (isBot) {
-                        console.log(
-                          "[SUBSCRIBE] 🤖 Bot用户音频订阅成功，准备播放"
-                        );
-                        log("Bot连接", `Bot用户 ${user.uid} 音频流已订阅`);
-                      }
-                    },
-                    onError: (user, mediaType, error) => {
-                      log(
-                        "订阅失败",
-                        `用户 ${user.uid} 音频订阅失败: ${error}`
-                      );
-                    },
-                  }
+                const success = await subscriptionManager.subscribeToUser(
+                  user.uid,
+                  "audio"
                 );
+                
+                // 订阅结果处理（成功/失败回调已在实例级别设置）
+                if (success && isBot) {
+                  console.log(
+                    "[SUBSCRIBE] 🤖 Bot用户音频订阅成功，准备播放"
+                  );
+                  log("Bot连接", `Bot用户 ${user.uid} 音频流已订阅`);
+                }
 
                 // 如果是Bot用户且订阅失败，启动自动重试
                 if (isBot && !success) {
                   console.log(
-                    "[SUBSCRIBE] 🔄 Bot用户订阅失败，启动自动重试机制"
+                    "[SUBSCRIBE] 🔄 Bot用户订阅失败，重试机制已自动启动"
                   );
-                  subscriptionManager.scheduleRetrySubscription(
-                    user,
-                    "audio",
-                    3
-                  );
+                  // 注意：WebSubscriptionManager 内置重试机制，无需手动调度
                 }
               } catch (error) {
                 console.error("[SUBSCRIBE] ❌ 订阅管理器处理失败:", error);
@@ -828,10 +892,8 @@
       }
 
       async function disconnect() {
-        elements.connectButton.disabled = false;
         elements.disconnectButton.disabled = true;
-        setConnectionState("offline", "连接已关闭，可随时重新加入频道");
-
+        
         try {
           client.off("user-published", handleUserPublished);
           client.off("user-unpublished", handleUserUnpublished);
@@ -858,12 +920,12 @@
             console.log("[SUBSCRIPTION] 订阅管理器已清理");
           }
 
-          if (client.connectionState !== "DISCONNECTED") {
-            await client.leave();
-          }
-          log("系统", "已离开声网频道");
+          // 调用统一的清理函数（包含房间锁释放）
+          await leaveAndCleanup();
         } catch (error) {
           log("错误", `断开连接出现问题: ${error.message}`);
+          // 即使出错也要尝试清理
+          await leaveAndCleanup();
         }
       }
 
@@ -970,7 +1032,7 @@
         }
       }
 
-      elements.connectButton.addEventListener("click", connect);
+      elements.connectButton.addEventListener("click", enterAndJoin);
       elements.disconnectButton.addEventListener("click", disconnect);
 
       elements.volumeSlider.addEventListener("input", (event) => {
@@ -981,9 +1043,18 @@
         }
       });
 
-      window.addEventListener("beforeunload", () => {
-        if (client.connectionState !== "DISCONNECTED") {
-          client.leave();
+      // —— 挂到所有退出路径 ——
+      // 1) 关闭/刷新
+      window.addEventListener("beforeunload", leaveAndCleanup);
+      window.addEventListener("pagehide", leaveAndCleanup);     // iOS Safari
+      // 2) 页面可见性变化（可选：后台停播，前台再播）
+      window.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          console.log("[DEBUG] 页面进入后台");
+          // 可选：暂停某些操作
+        } else {
+          console.log("[DEBUG] 页面回到前台");
+          // 可选：恢复某些操作
         }
       });
 

@@ -466,8 +466,14 @@
             navigator.sendBeacon(leaveUrl, new Blob([JSON.stringify({channel:CHANNEL, sessionId})], {type:"application/json"}));
             log("系统", "已释放房间锁");
           }
+          
+          // 关闭RTC系统（释放Agora资源）
+          const shutdownUrl = `${API_BASE_URL}/api/rtc/shutdown`;
+          navigator.sendBeacon(shutdownUrl, new Blob([JSON.stringify({})], {type:"application/json"}));
+          log("系统", "已请求关闭RTC系统");
+          
         } catch(e) {
-          console.error("释放房间锁失败:", e);
+          console.error("释放资源失败:", e);
         }
         
         clearInterval(beatTimer); 
@@ -490,11 +496,32 @@
           return;
         }
         isConnecting = true;
-        setConnectionState("idle", "正在申请进入房间...");
+        setConnectionState("idle", "正在初始化RTC系统...");
         elements.connectButton.disabled = true;
-        log("系统", "申请进入房间（竞争性获取锁）...");
+        log("系统", "开始初始化RTC系统...");
 
         try {
+          // 0) 先初始化RTC系统（按需启动Agora连接）
+          const initUrl = `${API_BASE_URL}/api/rtc/init`;
+          console.log("初始化RTC系统URL:", initUrl);
+          const initResponse = await fetch(initUrl, {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({})
+          });
+          
+          if (!initResponse.ok) {
+            throw new Error(`RTC初始化失败 HTTP ${initResponse.status}: ${initResponse.statusText}`);
+          }
+          
+          const initResult = await initResponse.json();
+          if (!initResult.ok) {
+            throw new Error(`RTC初始化失败: ${initResult.error}`);
+          }
+          
+          log("系统", "✅ RTC系统初始化成功，正在申请进入房间...");
+          setConnectionState("idle", "正在申请进入房间...");
+
           // 1) 申请进入（拿锁+拿token）
           const enterUrl = `${API_BASE_URL}/rtc/enter`;
           console.log("请求URL:", enterUrl);

@@ -297,6 +297,7 @@
       let analyser = null;
       let micDataArray = null;
       let meterAnimation = null;
+      let remoteUsersCheckTimer = null;
 
       const elements = {
         connectionStatus: document.getElementById("connectionStatus"),
@@ -449,6 +450,28 @@
       let sessionId, token, uid, appId;
       let beatTimer;
 
+      // 统一成命名函数，便于 off
+      function handleUserLeft(user) {
+        console.log("[EVENT] user-left:", user.uid);
+        elements.remoteUid.textContent = "-";
+        log("离开", `UID ${user.uid} 已离开`);
+      }
+
+      async function handleUserJoined(user) {
+        console.log("[EVENT] user-joined:", user.uid);
+        log("加入", `UID ${user.uid} 已加入`);
+        
+        // 使用订阅管理器处理新用户
+        if (subscriptionManager && WebUIDValidator.isBotUser(user.uid)) {
+          console.log(`[SUBSCRIPTION] 🤖 检测到Bot用户加入: ${user.uid}`);
+          try {
+            await subscriptionManager.subscribeToUser(user.uid, ["audio"]);
+          } catch (error) {
+            console.error(`[SUBSCRIPTION] Bot用户订阅失败:`, error);
+          }
+        }
+      }
+
       async function leaveAndCleanup() {
         try {
           if (client && client.connectionState !== "DISCONNECTED") {
@@ -575,11 +598,8 @@
           // ---- 把这些监听放到 join 之前 ----
           client.on("user-published", handleUserPublished);
           client.on("user-unpublished", handleUserUnpublished);
-          client.on("user-left", (user) => {
-            console.log("[EVENT] user-left:", user.uid);
-            elements.remoteUid.textContent = "-";
-            log("离开", `UID ${user.uid} 已离开`);
-          });
+          client.on("user-left", handleUserLeft);
+          client.on("user-joined", handleUserJoined);
 
           // 3) 加入频道
           await client.join(appId, CHANNEL, token, uid);
@@ -867,24 +887,7 @@
             }
           });
 
-          // 用户发布事件
-          client.on("user-published", handleUserPublished);
 
-          // 用户取消发布事件
-          client.on("user-unpublished", (user, mediaType) => {
-            console.log("[EVENT] user-unpublished:", user.uid, mediaType);
-            console.log("用户取消发布:", user.uid);
-            elements.remoteUid.textContent = "-";
-            log("取消发布", `UID ${user.uid} 取消发布音频`);
-          });
-
-          // 处理用户离开频道
-          client.on("user-left", (user) => {
-            console.log("[EVENT] user-left:", user.uid);
-            console.log("用户离开:", user.uid);
-            elements.remoteUid.textContent = "-";
-            log("离开", `UID ${user.uid} 已离开`);
-          });
 
           client.on("connection-state-change", (cur, prev, reason) => {
             log("声网", `连接状态: ${prev} -> ${cur} (${reason})`);
@@ -895,7 +898,7 @@
           log("系统", "连接完成，Bot 音频将自动播放");
 
           // ?? 添加：定时检查频道内的远端用户（增强版）
-          setInterval(() => {
+          remoteUsersCheckTimer = setInterval(() => {
             const remoteUsers = client.remoteUsers;
             console.log("[CHECK] =========================");
             console.log("[CHECK] 频道内远端用户总数:", remoteUsers.length);
@@ -960,7 +963,15 @@
         try {
           client.off("user-published", handleUserPublished);
           client.off("user-unpublished", handleUserUnpublished);
+          client.off("user-left", handleUserLeft);
+          client.off("user-joined", handleUserJoined);
           client.off("connection-state-change");
+
+          // 清理定时器
+          if (remoteUsersCheckTimer) {
+            clearInterval(remoteUsersCheckTimer);
+            remoteUsersCheckTimer = null;
+          }
 
           if (remoteAudioTrack) {
             remoteAudioTrack.stop();
@@ -1042,7 +1053,7 @@
           // 尝试直接播放
           try {
             console.log("[SUBSCRIBE_FLOW] ?? 尝试播放到 remoteAudio 元素...");
-            remoteAudioTrack.play("remoteAudio");
+            remoteAudioTrack.play();
             console.log("[SUBSCRIBE_FLOW] ? play() 调用成功");
           } catch (err) {
             console.warn(

@@ -278,7 +278,7 @@
       <footer>
         <div>
           调试命令：<code
-            >curl https://cityuantifraud.cn/api/agora/config</code
+            >curl https://cityuantifraud.com/api/agora/config</code
           >
         </div>
       </footer>
@@ -290,7 +290,7 @@
       let microphoneAudioTrack = null; // 添加缺失的变量定义
       let remoteAudioTrack = null;
       let agoraConfigCache = null;
-      const backendBaseUrl = "https://cityuantifraud.cn";
+      const backendBaseUrl = "https://cityuantifraud.com";
       let isConnecting = false;
       let subscriptionManager = null;
       let audioContext = null;
@@ -445,7 +445,7 @@
 
       // 竞争性单通道相关变量
       const CHANNEL = "solidchannel";
-      const API_BASE_URL = "https://cityuantifraud.cn"; // 后端API基础URL
+      const API_BASE_URL = "https://cityuantifraud.com"; // 后端API基础URL
       let sessionId, token, uid, appId;
       let beatTimer;
 
@@ -572,9 +572,45 @@
             await client.leave().catch(() => {});
           }
 
+          // ---- 把这些监听放到 join 之前 ----
+          client.on("user-published", handleUserPublished);
+          client.on("user-unpublished", handleUserUnpublished);
+          client.on("user-left", (user) => {
+            console.log("[EVENT] user-left:", user.uid);
+            elements.remoteUid.textContent = "-";
+            log("离开", `UID ${user.uid} 已离开`);
+          });
+
           // 3) 加入频道
           await client.join(appId, CHANNEL, token, uid);
           log("声网", `已加入频道 ${CHANNEL}`);
+
+          // ---- Catch-up：join 后兜底检查一次远端用户并订阅音频 ----
+          try {
+            const users = client.remoteUsers || [];
+            for (const u of users) {
+              // hasAudio / audioTrack 任一为真就尝试一次
+              if (u.hasAudio || u.audioTrack) {
+                try {
+                  await client.subscribe(u, "audio");
+                  const track = u.audioTrack;
+                  if (track) {
+                    track.play();  // 不传容器，更稳
+                    const volume = Number(elements.volumeSlider.value || "70");
+                    track.setVolume(volume);
+                    elements.remoteUid.textContent = u.uid || "-";
+                    log("订阅", `补订阅成功：UID ${u.uid}（音频）`);
+                  } else {
+                    console.warn("[CATCHUP] 订阅后 audioTrack 仍为空：", u.uid);
+                  }
+                } catch (e) {
+                  console.warn("[CATCHUP] 补订阅失败：", u.uid, e);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("[CATCHUP] 遍历远端用户失败：", e);
+          }
 
           // 4) 初始化订阅管理器（监听Bot用户）
           const config = await fetchAgoraConfig("publisher"); // 获取botUid
@@ -760,7 +796,7 @@
             btn.style.borderRadius = "8px";
             btn.onclick = () => {
               if (remoteAudioTrack) {
-                remoteAudioTrack.play("remoteAudio");
+                remoteAudioTrack.play();  // 让 SDK 自建隐藏 <audio>，最稳
                 console.log("[DEBUG] 用户点击后恢复播放成功");
               }
               btn.remove();

@@ -44,7 +44,7 @@
         color: #2d3748;
         margin-bottom: 8px;
       }
-      /* 一个没用的注释，触发重启 */
+
       header p {
         color: #4a5568;
       }
@@ -124,7 +124,7 @@
         opacity: 0.6;
         cursor: not-allowed;
       }
-
+      /* 一个没用的注释，触发重启 */
       .meter {
         background: #edf2f7;
         border-radius: 14px;
@@ -587,28 +587,34 @@
           // 注意：WebSubscriptionManager不需要initialize方法，构造函数已完成初始化
           // subscriptionManager.setSubscriptionCallback(handleSubscription); // 此方法也不存在，使用回调属性代替
 
-          // 设置订阅管理器回调
-          subscriptionManager.onSubscriptionSuccess = (
-            uid,
-            mediaType,
-            result
-          ) => {
+          subscriptionManager.onSubscriptionSuccess = (uid, mediaType, result) => {
             console.log(`[SUBSCRIPTION] ✅ 订阅成功: ${uid} (${mediaType})`);
-            log(
-              "订阅",
-              `成功订阅用户 ${uid} 的${
-                mediaType === "audio" ? "音频" : "视频"
-              }流`
-            );
+            log("订阅", `成功订阅用户 ${uid} 的${mediaType === "audio" ? "音频" : "视频"}流`);
 
-            // 特别处理Bot用户的音频订阅
             if (WebUIDValidator.isBotUser(uid) && mediaType === "audio") {
               console.log(`[SUBSCRIPTION] 🤖 Bot用户音频订阅成功，开始播放`);
-              if (result && result.play) {
-                result.play();
+
+              // 保存全局变量，方便 autoplayFailed 或断开时清理
+              remoteAudioTrack = result || client.remoteUsers.find(u => u.uid === uid)?.audioTrack;
+
+              if (remoteAudioTrack) {
+                try {
+                  remoteAudioTrack.play("remoteAudio");
+                  console.log("[SUBSCRIPTION] Bot音频已播放");
+                } catch (err) {
+                  console.warn("[SUBSCRIPTION] 播放失败，可能是 autoplay 限制:", err);
+                }
+              } else {
+                console.error("[SUBSCRIPTION] 订阅成功但未获取到 audioTrack 对象");
               }
             }
           };
+
+
+
+
+
+
 
           subscriptionManager.onSubscriptionFailed = (
             uid,
@@ -767,72 +773,90 @@
             };
             document.body.appendChild(btn);
           };
+          // [WELCOME] 前端触发欢迎语
+          try {
+            const resp = await fetch(`${API_BASE_URL}/api/rtc/welcome`, {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({})
+            });
+            const data = await resp.json();
+            console.log("[WELCOME] 触发结果:", data);
+            if (data.ok && data.welcome_sent) {
+              log("系统", "欢迎语已触发");
+            } else {
+              console.warn("[WELCOME] 触发失败或未发送:", data);
+            }
+          } catch (err) {
+            console.error("[WELCOME] 请求出错:", err);
+          }
+
 
           // ?? 修复：在join之前注册事件监听，避免错过Bot的published事件
           console.log("[DEBUG] 在join前注册所有事件监听");
 
-          // 用户加入事件 - 使用订阅管理器处理显式订阅
-          client.on("user-joined", async (user) => {
-            console.log("[EVENT] user-joined:", user.uid);
-            console.log("[EVENT] 用户加入详情:", {
-              uid: user.uid,
-              hasAudioTrack: !!user.audioTrack,
-              hasVideoTrack: !!user.videoTrack,
-            });
+          // // 用户加入事件 - 使用订阅管理器处理显式订阅
+          // client.on("user-joined", async (user) => {
+          //   console.log("[EVENT] user-joined:", user.uid);
+          //   console.log("[EVENT] 用户加入详情:", {
+          //     uid: user.uid,
+          //     hasAudioTrack: !!user.audioTrack,
+          //     hasVideoTrack: !!user.videoTrack,
+          //   });
 
-            // 使用订阅管理器处理显式订阅
-            if (subscriptionManager && user.hasAudio) {
-              const isBot = WebUIDValidator.isBotUser(user.uid);
+          //   // 使用订阅管理器处理显式订阅
+          //   if (subscriptionManager && user.hasAudio) {
+          //     const isBot = WebUIDValidator.isBotUser(user.uid);
 
-              try {
-                const success = await subscriptionManager.subscribeToUser(
-                  user.uid,
-                  "audio"
-                );
+          //     try {
+          //       const success = await subscriptionManager.subscribeToUser(
+          //         user.uid,
+          //         "audio"
+          //       );
                 
-                // 订阅结果处理（成功/失败回调已在实例级别设置）
-                if (success && isBot) {
-                  console.log(
-                    "[SUBSCRIBE] 🤖 Bot用户音频订阅成功，准备播放"
-                  );
-                  log("Bot连接", `Bot用户 ${user.uid} 音频流已订阅`);
-                }
+          //       // 订阅结果处理（成功/失败回调已在实例级别设置）
+          //       if (success && isBot) {
+          //         console.log(
+          //           "[SUBSCRIBE] 🤖 Bot用户音频订阅成功，准备播放"
+          //         );
+          //         log("Bot连接", `Bot用户 ${user.uid} 音频流已订阅`);
+          //       }
 
-                // 如果是Bot用户且订阅失败，启动自动重试
-                if (isBot && !success) {
-                  console.log(
-                    "[SUBSCRIBE] 🔄 Bot用户订阅失败，重试机制已自动启动"
-                  );
-                  // 注意：WebSubscriptionManager 内置重试机制，无需手动调度
-                }
-              } catch (error) {
-                console.error("[SUBSCRIBE] ❌ 订阅管理器处理失败:", error);
-                log("系统错误", `订阅管理器处理用户 ${user.uid} 失败`);
-              }
-            } else if (user.hasAudio) {
-              // 如果订阅管理器未初始化，回退到直接订阅
-              console.warn("[SUBSCRIBE] ⚠️ 订阅管理器未初始化，使用直接订阅");
-              try {
-                await client.subscribe(user, "audio");
-                console.log("[SUBSCRIBE] ✅ 直接订阅成功:", user.uid);
-              } catch (error) {
-                console.error("[SUBSCRIBE] ❌ 直接订阅失败:", error);
-              }
-            } else {
-              console.log("[SUBSCRIBE] ⚠️ 用户无音频流，跳过订阅:", user.uid);
+          //       // 如果是Bot用户且订阅失败，启动自动重试
+          //       if (isBot && !success) {
+          //         console.log(
+          //           "[SUBSCRIBE] 🔄 Bot用户订阅失败，重试机制已自动启动"
+          //         );
+          //         // 注意：WebSubscriptionManager 内置重试机制，无需手动调度
+          //       }
+          //     } catch (error) {
+          //       console.error("[SUBSCRIBE] ❌ 订阅管理器处理失败:", error);
+          //       log("系统错误", `订阅管理器处理用户 ${user.uid} 失败`);
+          //     }
+          //   } else if (user.hasAudio) {
+          //     // 如果订阅管理器未初始化，回退到直接订阅
+          //     console.warn("[SUBSCRIBE] ⚠️ 订阅管理器未初始化，使用直接订阅");
+          //     try {
+          //       await client.subscribe(user, "audio");
+          //       console.log("[SUBSCRIBE] ✅ 直接订阅成功:", user.uid);
+          //     } catch (error) {
+          //       console.error("[SUBSCRIBE] ❌ 直接订阅失败:", error);
+          //     }
+          //   } else {
+          //     console.log("[SUBSCRIBE] ⚠️ 用户无音频流，跳过订阅:", user.uid);
 
-              // 如果是Bot用户但没有音频流，记录警告
-              if (WebUIDValidator.isBotUser(user.uid)) {
-                console.warn(
-                  "[SUBSCRIBE] ⚠️ Bot用户无音频流，可能存在发布问题"
-                );
-                log("警告", `Bot用户 ${user.uid} 加入但无音频流`);
-              }
-            }
-          });
+          //     // 如果是Bot用户但没有音频流，记录警告
+          //     if (WebUIDValidator.isBotUser(user.uid)) {
+          //       console.warn(
+          //         "[SUBSCRIBE] ⚠️ Bot用户无音频流，可能存在发布问题"
+          //       );
+          //       log("警告", `Bot用户 ${user.uid} 加入但无音频流`);
+          //     }
+          //   }
+          // });
 
-          // 用户发布事件
-          client.on("user-published", handleUserPublished);
+          // // 用户发布事件
+          // client.on("user-published", handleUserPublished);
 
           // 用户取消发布事件
           client.on("user-unpublished", (user, mediaType) => {
@@ -841,7 +865,7 @@
             elements.remoteUid.textContent = "-";
             log("取消发布", `UID ${user.uid} 取消发布音频`);
           });
-
+          
           // 处理用户离开频道
           client.on("user-left", (user) => {
             console.log("[EVENT] user-left:", user.uid);
@@ -922,8 +946,8 @@
         elements.disconnectButton.disabled = true;
         
         try {
-          client.off("user-published", handleUserPublished);
-          client.off("user-unpublished", handleUserUnpublished);
+          // client.off("user-published", handleUserPublished);
+          // client.off("user-unpublished", handleUserUnpublished);
           client.off("connection-state-change");
 
           if (remoteAudioTrack) {
@@ -956,108 +980,108 @@
         }
       }
 
-      async function handleUserPublished(user, mediaType) {
-        console.log(
-          "[SUBSCRIBE_FLOW] ?? Detected user publish:",
-          user.uid,
-          mediaType
-        );
-        console.log("[DEBUG] user-published:", user.uid, mediaType);
-        console.log("[SUBSCRIBE_FLOW] ?? User object before subscribe:", {
-          uid: user.uid,
-          hasAudioTrack: !!user.audioTrack,
-          hasVideoTrack: !!user.videoTrack,
-          userObject: user,
-        });
+      // async function handleUserPublished(user, mediaType) {
+      //   console.log(
+      //     "[SUBSCRIBE_FLOW] ?? Detected user publish:",
+      //     user.uid,
+      //     mediaType
+      //   );
+      //   console.log("[DEBUG] user-published:", user.uid, mediaType);
+      //   console.log("[SUBSCRIBE_FLOW] ?? User object before subscribe:", {
+      //     uid: user.uid,
+      //     hasAudioTrack: !!user.audioTrack,
+      //     hasVideoTrack: !!user.videoTrack,
+      //     userObject: user,
+      //   });
 
-        if (mediaType !== "audio") {
-          console.log("[DEBUG] 非音频轨道，忽略");
-          return;
-        }
+      //   if (mediaType !== "audio") {
+      //     console.log("[DEBUG] 非音频轨道，忽略");
+      //     return;
+      //   }
 
-        try {
-          console.log("[SUBSCRIBE_FLOW] ?? 开始订阅用户音频:", user.uid);
-          console.log(
-            '[SUBSCRIBE_FLOW] ?? 调用 client.subscribe(user, "audio")...'
-          );
+      //   try {
+      //     console.log("[SUBSCRIBE_FLOW] ?? 开始订阅用户音频:", user.uid);
+      //     console.log(
+      //       '[SUBSCRIBE_FLOW] ?? 调用 client.subscribe(user, "audio")...'
+      //     );
 
-          await client.subscribe(user, "audio");
+      //     await client.subscribe(user, "audio");
 
-          console.log("[SUBSCRIBE_FLOW] ? subscribe() 调用完成，检查结果...");
-          console.log("[SUBSCRIBE_FLOW] ?? User object after subscribe:", {
-            uid: user.uid,
-            hasAudioTrack: !!user.audioTrack,
-            audioTrackType: typeof user.audioTrack,
-            audioTrackObject: user.audioTrack,
-          });
+      //     console.log("[SUBSCRIBE_FLOW] ? subscribe() 调用完成，检查结果...");
+      //     console.log("[SUBSCRIBE_FLOW] ?? User object after subscribe:", {
+      //       uid: user.uid,
+      //       hasAudioTrack: !!user.audioTrack,
+      //       audioTrackType: typeof user.audioTrack,
+      //       audioTrackObject: user.audioTrack,
+      //     });
 
-          if (!user.audioTrack) {
-            console.error("[SUBSCRIBE_FLOW] ? 订阅后 audioTrack 仍为空！");
-            log("错误", `订阅 ${user.uid} 后 audioTrack 为空`);
-            return;
-          }
+      //     if (!user.audioTrack) {
+      //       console.error("[SUBSCRIBE_FLOW] ? 订阅后 audioTrack 仍为空！");
+      //       log("错误", `订阅 ${user.uid} 后 audioTrack 为空`);
+      //       return;
+      //     }
 
-          console.log(
-            "[SUBSCRIBE_FLOW] ? 订阅成功，获得 audioTrack:",
-            user.uid
-          );
-          remoteAudioTrack = user.audioTrack;
+      //     console.log(
+      //       "[SUBSCRIBE_FLOW] ? 订阅成功，获得 audioTrack:",
+      //       user.uid
+      //     );
+      //     remoteAudioTrack = user.audioTrack;
 
-          // 尝试直接播放
-          try {
-            console.log("[SUBSCRIBE_FLOW] ?? 尝试播放到 remoteAudio 元素...");
-            remoteAudioTrack.play("remoteAudio");
-            console.log("[SUBSCRIBE_FLOW] ? play() 调用成功");
-          } catch (err) {
-            console.warn(
-              "[SUBSCRIBE_FLOW] ?? play() 调用失败，可能被 autoplay 限制:",
-              err
-            );
-          }
+      //     // 尝试直接播放
+      //     try {
+      //       console.log("[SUBSCRIBE_FLOW] ?? 尝试播放到 remoteAudio 元素...");
+      //       remoteAudioTrack.play("remoteAudio");
+      //       console.log("[SUBSCRIBE_FLOW] ? play() 调用成功");
+      //     } catch (err) {
+      //       console.warn(
+      //         "[SUBSCRIBE_FLOW] ?? play() 调用失败，可能被 autoplay 限制:",
+      //         err
+      //       );
+      //     }
 
-          // 设置音量
-          const volume = Number(elements.volumeSlider.value);
-          remoteAudioTrack.setVolume(volume);
-          console.log("[SUBSCRIBE_FLOW] ?? 设置音量:", volume);
+      //     // 设置音量
+      //     const volume = Number(elements.volumeSlider.value);
+      //     remoteAudioTrack.setVolume(volume);
+      //     console.log("[SUBSCRIBE_FLOW] ?? 设置音量:", volume);
 
-          // 打印用户 UID
-          elements.remoteUid.textContent = user.uid || "-";
-          log("Bot", `UID ${user.uid} 音频已接入`);
+      //     // 打印用户 UID
+      //     elements.remoteUid.textContent = user.uid || "-";
+      //     log("Bot", `UID ${user.uid} 音频已接入`);
 
-          // 周期性打印音频统计数据
-          if (remoteAudioTrack.getStats) {
-            setInterval(() => {
-              const stats = remoteAudioTrack.getStats();
-              console.log("[AUDIO_STATS]", {
-                uid: user.uid,
-                bitrate: stats?.receiveBitrate,
-                packets: stats?.receivePackets,
-                lossRate: stats?.receivePacketsLost,
-                codec: stats?.codecType,
-                isPlaying: remoteAudioTrack?.isPlaying,
-              });
-            }, 3000);
-          }
-        } catch (error) {
-          console.error("[SUBSCRIBE_FLOW] ? 订阅过程中发生错误:", error);
-          console.error("[SUBSCRIBE_FLOW] ?? 错误详情:", {
-            message: error.message,
-            code: error.code,
-            stack: error.stack,
-          });
-          log("错误", `无法订阅 Bot 音频: ${error.message}`);
-        }
-      }
+      //     // 周期性打印音频统计数据
+      //     if (remoteAudioTrack.getStats) {
+      //       setInterval(() => {
+      //         const stats = remoteAudioTrack.getStats();
+      //         console.log("[AUDIO_STATS]", {
+      //           uid: user.uid,
+      //           bitrate: stats?.receiveBitrate,
+      //           packets: stats?.receivePackets,
+      //           lossRate: stats?.receivePacketsLost,
+      //           codec: stats?.codecType,
+      //           isPlaying: remoteAudioTrack?.isPlaying,
+      //         });
+      //       }, 3000);
+      //     }
+      //   } catch (error) {
+      //     console.error("[SUBSCRIBE_FLOW] ? 订阅过程中发生错误:", error);
+      //     console.error("[SUBSCRIBE_FLOW] ?? 错误详情:", {
+      //       message: error.message,
+      //       code: error.code,
+      //       stack: error.stack,
+      //     });
+      //     log("错误", `无法订阅 Bot 音频: ${error.message}`);
+      //   }
+      // }
 
-      function handleUserUnpublished(user, mediaType) {
-        if (mediaType === "audio" && remoteAudioTrack) {
-          remoteAudioTrack.stop();
-          remoteAudioTrack.close();
-          remoteAudioTrack = null;
-          elements.remoteUid.textContent = "-";
-          log("Bot", `UID ${user.uid} 已离开频道`);
-        }
-      }
+      // function handleUserUnpublished(user, mediaType) {
+      //   if (mediaType === "audio" && remoteAudioTrack) {
+      //     remoteAudioTrack.stop();
+      //     remoteAudioTrack.close();
+      //     remoteAudioTrack = null;
+      //     elements.remoteUid.textContent = "-";
+      //     log("Bot", `UID ${user.uid} 已离开频道`);
+      //   }
+      // }
 
       elements.connectButton.addEventListener("click", enterAndJoin);
       elements.disconnectButton.addEventListener("click", disconnect);

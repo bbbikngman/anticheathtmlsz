@@ -68,30 +68,45 @@ class WebSubscriptionManager {
    * 处理用户加入事件
    */
   async _handleUserJoined(user) {
-    this._log("info", `用户加入事件: ${user.uid}`, {
-      uid: user.uid,
-      hasAudio: user.hasAudio,
-      hasVideo: user.hasVideo,
-    });
+  this._log("info", `用户加入事件: ${user.uid}`, {
+    uid: user.uid,
+    hasAudio: user.hasAudio,
+    hasVideo: user.hasVideo,
+  });
 
-    // 记录用户信息
-    this._updateSubscriptionInfo(user.uid, {
-      state: WebSubscriptionManager.SubscriptionState.NOT_SUBSCRIBED,
-      user: user,
-      joinedAt: new Date(),
-      hasAudio: user.hasAudio,
-      hasVideo: user.hasVideo,
-    });
+  // 记录用户信息
+  this._updateSubscriptionInfo(user.uid, {
+    state: WebSubscriptionManager.SubscriptionState.NOT_SUBSCRIBED,
+    user: user,
+    joinedAt: new Date(),
+    hasAudio: user.hasAudio,
+    hasVideo: user.hasVideo,
+  });
 
-    // 如果启用自动订阅且用户有媒体流，则尝试订阅
-    if (this.options.enableAutoSubscribe) {
-      if (user.hasAudio || user.hasVideo) {
-        await this._attemptAutoSubscription(user);
-      } else {
-        this._log("debug", `用户 ${user.uid} 暂无媒体流，等待发布事件`);
-      }
+  // 如果启用自动订阅且用户有媒体流，则尝试订阅
+  if (this.options.enableAutoSubscribe) {
+    if (user.hasAudio || user.hasVideo) {
+      await this._attemptAutoSubscription(user);
+    } else {
+      this._log("debug", `用户 ${user.uid} 暂无媒体流，等待发布事件`);
     }
   }
+
+  // === [扩展1] 兜底扫描（只针对 Bot 用户） ===
+  if (user.hasAudio && window.WebUIDValidator?.isBotUser(user.uid)) {
+    try {
+      const success = await this.subscribeToUser(user.uid, "audio");
+      if (success && user.audioTrack) {
+        user.audioTrack.play("remoteAudio");
+        this._log("info", `🔄 兜底订阅 Bot 用户 ${user.uid} 成功`);
+      }
+    } catch (err) {
+      this._log("error", `兜底订阅 Bot 用户失败: ${err.message}`);
+    }
+  }
+
+}
+
 
   /**
    * 处理用户发布事件

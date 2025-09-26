@@ -34,6 +34,18 @@ class WebSubscriptionManager {
       logLevel: options.logLevel || "info",
       ...options,
     };
+    this._boundHandlers = {
+      userJoined: this._handleUserJoined.bind(this),
+      userPublished: this._handleUserPublished.bind(this),
+      userUnpublished: this._handleUserUnpublished.bind(this),
+      userLeft: this._handleUserLeft.bind(this),
+    };
+
+    // 绑定：
+    this.client.on("user-joined", this._boundHandlers.userJoined);
+    this.client.on("user-published", this._boundHandlers.userPublished);
+    this.client.on("user-unpublished", this._boundHandlers.userUnpublished);
+    this.client.on("user-left", this._boundHandlers.userLeft);
 
     // 订阅状态跟踪
     this.subscriptions = new Map(); // uid -> subscription info
@@ -45,8 +57,7 @@ class WebSubscriptionManager {
     this.onSubscriptionFailed = null;
     this.onSubscriptionStateChanged = null;
 
-    // 绑定事件处理器
-    this._bindEventHandlers();
+    
 
     this._log("info", "显式订阅管理器初始化完成", { options: this.options });
   }
@@ -54,16 +65,7 @@ class WebSubscriptionManager {
   /**
    * 绑定事件处理器
    */
-  _bindEventHandlers() {
-    // 用户加入事件 - 声网技术支持建议：显式订阅确保兼容性
-    this.client.on("user-joined", this._handleUserJoined.bind(this));
-    this.client.on("user-published", this._handleUserPublished.bind(this));
-    this.client.on("user-unpublished", this._handleUserUnpublished.bind(this));
-    this.client.on("user-left", this._handleUserLeft.bind(this));
-
-    this._log("debug", "事件处理器绑定完成");
-  }
-
+ 
   /**
    * 处理用户加入事件
    */
@@ -616,11 +618,11 @@ class WebSubscriptionManager {
     this.subscriptions.clear();
     this.subscriptionHistory = [];
 
-    // 移除事件监听器
-    this.client.off("user-joined", this._handleUserJoined);
-    this.client.off("user-published", this._handleUserPublished);
-    this.client.off("user-unpublished", this._handleUserUnpublished);
-    this.client.off("user-left", this._handleUserLeft);
+    this.client.off("user-joined", this._boundHandlers.userJoined);
+    this.client.off("user-published", this._boundHandlers.userPublished);
+    this.client.off("user-unpublished", this._boundHandlers.userUnpublished);
+    this.client.off("user-left", this._boundHandlers.userLeft);
+    this._boundHandlers = null;
 
     this._log("info", "订阅管理器已销毁");
   }

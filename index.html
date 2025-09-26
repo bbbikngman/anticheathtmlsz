@@ -448,7 +448,12 @@
       const API_BASE_URL = "https://cityuantifraud.cn"; // 后端API基础URL
       let sessionId, token, uid, appId;
       let beatTimer;
-
+      let remoteCheckTimer = null; // ✅ 新增：远端用户定时检查计时器（全局）
+      let clientHandlers = {
+        userUnpublished: null,
+        userLeft: null,
+        connectionStateChange: null,
+      };
       async function leaveAndCleanup() {
         try {
           if (client && client.connectionState !== "DISCONNECTED") {
@@ -485,7 +490,17 @@
           microphoneAudioTrack.close();
           microphoneAudioTrack = null;
         }
-        
+        // ✅ 退出时复位全局回调，避免二次进入页面出现异常行为
+        try {
+          AgoraRTC.onAutoplayFailed = null;
+        } catch (_) {}
+
+        // ✅ 统一清理远端检查定时器
+        if (remoteCheckTimer) {
+          clearInterval(remoteCheckTimer);
+          remoteCheckTimer = null;
+        }
+
         setConnectionState("offline", "已断开连接");
         elements.connectButton.disabled = false;
         isConnecting = false;
@@ -795,95 +810,16 @@
           // ?? 修复：在join之前注册事件监听，避免错过Bot的published事件
           console.log("[DEBUG] 在join前注册所有事件监听");
 
-          // // 用户加入事件 - 使用订阅管理器处理显式订阅
-          // client.on("user-joined", async (user) => {
-          //   console.log("[EVENT] user-joined:", user.uid);
-          //   console.log("[EVENT] 用户加入详情:", {
-          //     uid: user.uid,
-          //     hasAudioTrack: !!user.audioTrack,
-          //     hasVideoTrack: !!user.videoTrack,
-          //   });
-
-          //   // 使用订阅管理器处理显式订阅
-          //   if (subscriptionManager && user.hasAudio) {
-          //     const isBot = WebUIDValidator.isBotUser(user.uid);
-
-          //     try {
-          //       const success = await subscriptionManager.subscribeToUser(
-          //         user.uid,
-          //         "audio"
-          //       );
-                
-          //       // 订阅结果处理（成功/失败回调已在实例级别设置）
-          //       if (success && isBot) {
-          //         console.log(
-          //           "[SUBSCRIBE] 🤖 Bot用户音频订阅成功，准备播放"
-          //         );
-          //         log("Bot连接", `Bot用户 ${user.uid} 音频流已订阅`);
-          //       }
-
-          //       // 如果是Bot用户且订阅失败，启动自动重试
-          //       if (isBot && !success) {
-          //         console.log(
-          //           "[SUBSCRIBE] 🔄 Bot用户订阅失败，重试机制已自动启动"
-          //         );
-          //         // 注意：WebSubscriptionManager 内置重试机制，无需手动调度
-          //       }
-          //     } catch (error) {
-          //       console.error("[SUBSCRIBE] ❌ 订阅管理器处理失败:", error);
-          //       log("系统错误", `订阅管理器处理用户 ${user.uid} 失败`);
-          //     }
-          //   } else if (user.hasAudio) {
-          //     // 如果订阅管理器未初始化，回退到直接订阅
-          //     console.warn("[SUBSCRIBE] ⚠️ 订阅管理器未初始化，使用直接订阅");
-          //     try {
-          //       await client.subscribe(user, "audio");
-          //       console.log("[SUBSCRIBE] ✅ 直接订阅成功:", user.uid);
-          //     } catch (error) {
-          //       console.error("[SUBSCRIBE] ❌ 直接订阅失败:", error);
-          //     }
-          //   } else {
-          //     console.log("[SUBSCRIBE] ⚠️ 用户无音频流，跳过订阅:", user.uid);
-
-          //     // 如果是Bot用户但没有音频流，记录警告
-          //     if (WebUIDValidator.isBotUser(user.uid)) {
-          //       console.warn(
-          //         "[SUBSCRIBE] ⚠️ Bot用户无音频流，可能存在发布问题"
-          //       );
-          //       log("警告", `Bot用户 ${user.uid} 加入但无音频流`);
-          //     }
-          //   }
-          // });
-
-          // // 用户发布事件
-          // client.on("user-published", handleUserPublished);
-
-          // 用户取消发布事件
-          client.on("user-unpublished", (user, mediaType) => {
-            console.log("[EVENT] user-unpublished:", user.uid, mediaType);
-            console.log("用户取消发布:", user.uid);
-            elements.remoteUid.textContent = "-";
-            log("取消发布", `UID ${user.uid} 取消发布音频`);
-          });
-          
-          // 处理用户离开频道
-          client.on("user-left", (user) => {
-            console.log("[EVENT] user-left:", user.uid);
-            console.log("用户离开:", user.uid);
-            elements.remoteUid.textContent = "-";
-            log("离开", `UID ${user.uid} 已离开`);
-          });
-
-          client.on("connection-state-change", (cur, prev, reason) => {
-            log("声网", `连接状态: ${prev} -> ${cur} (${reason})`);
-          });
+          // 成功 join 并完成其他准备后
+          bindClientEvents();
 
           setConnectionState("online", "声网链路已建立，等待 Bot 音频...");
           elements.disconnectButton.disabled = false;
           log("系统", "连接完成，Bot 音频将自动播放");
 
           // ?? 添加：定时检查频道内的远端用户（增强版）
-          setInterval(() => {
+          if (remoteCheckTimer) { clearInterval(remoteCheckTimer); remoteCheckTimer = null; } // 避免重复
+          remoteCheckTimer = setInterval(() => {
             const remoteUsers = client.remoteUsers;
             console.log("[CHECK] =========================");
             console.log("[CHECK] 频道内远端用户总数:", remoteUsers.length);
@@ -941,15 +877,59 @@
           }
         }
       }
+      function bindClientEvents() {
+        // 先防御性解绑（避免极端情况下重复绑定）
+        unbindClientEvents();
 
+        clientHandlers.userUnpublished = (user, mediaType) => {
+          console.log("[EVENT] user-unpublished:", user.uid, mediaType);
+          elements.remoteUid.textContent = "-";
+          log("取消发布", `UID ${user.uid} 取消发布音频`);
+        };
+
+        clientHandlers.userLeft = (user) => {
+          console.log("[EVENT] user-left:", user.uid);
+          elements.remoteUid.textContent = "-";
+          log("离开", `UID ${user.uid} 已离开`);
+        };
+
+        clientHandlers.connectionStateChange = (cur, prev, reason) => {
+          log("声网", `连接状态: ${prev} -> ${cur} (${reason})`);
+        };
+
+        client.on("user-unpublished", clientHandlers.userUnpublished);
+        client.on("user-left", clientHandlers.userLeft);
+        client.on("connection-state-change", clientHandlers.connectionStateChange);
+      }
+
+      function unbindClientEvents() {
+        if (clientHandlers.connectionStateChange) {
+          client.off("connection-state-change", clientHandlers.connectionStateChange);
+        }
+        if (clientHandlers.userUnpublished) {
+          client.off("user-unpublished", clientHandlers.userUnpublished);
+        }
+        if (clientHandlers.userLeft) {
+          client.off("user-left", clientHandlers.userLeft);
+        }
+        // 可选：重置为 null，避免误用旧指针
+        clientHandlers = {
+          userUnpublished: null,
+          userLeft: null,
+          connectionStateChange: null,
+        };
+      }
       async function disconnect() {
         elements.disconnectButton.disabled = true;
         
         try {
-          // client.off("user-published", handleUserPublished);
-          // client.off("user-unpublished", handleUserUnpublished);
-          client.off("connection-state-change");
 
+          // ① 先解绑所有 client 事件（对称）
+          unbindClientEvents();
+             // （可留着你的这行，等价防御）
+          // client.off("connection-state-change");
+          
+         // ② 关远端/本地轨道
           if (remoteAudioTrack) {
             remoteAudioTrack.stop();
             remoteAudioTrack.close();
@@ -961,8 +941,18 @@
             localTrack.close();
             localTrack = null;
           }
-
+          // ③ 停止电平动画
           stopMicMeter();
+
+           // ✅ 统一清理远端检查定时器
+          if (remoteCheckTimer) {
+            clearInterval(remoteCheckTimer);
+            remoteCheckTimer = null;
+          }
+          // ✅ 退出时复位全局回调，避免二次进入页面出现异常行为
+          try {
+            AgoraRTC.onAutoplayFailed = null;
+          } catch (_) {}
 
           // 清理订阅管理器
           if (subscriptionManager) {
@@ -970,6 +960,7 @@
             subscriptionManager = null;
             console.log("[SUBSCRIPTION] 订阅管理器已清理");
           }
+         
 
           // 调用统一的清理函数（包含房间锁释放）
           await leaveAndCleanup();

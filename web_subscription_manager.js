@@ -127,14 +127,130 @@ class WebSubscriptionManager {
       subscriptionInfo.hasAudio = user.hasAudio;
       subscriptionInfo.hasVideo = user.hasVideo;
       subscriptionInfo.user = user;
+    } else {
+      // 如果 _handleUserJoined 没有及时更新，这里也尝试更新
+      this._updateSubscriptionInfo(user.uid, {
+        user: user,
+        hasAudio: user.hasAudio,
+        hasVideo: user.hasVideo,
+        state: WebSubscriptionManager.SubscriptionState.NOT_SUBSCRIBED,
+        joinedAt: subscriptionInfo?.joinedAt || new Date(), // 尽可能保留加入时间
+        updatedAt: new Date(),
+      });
     }
 
     // 如果启用自动订阅，尝试订阅新发布的媒体
     if (this.options.enableAutoSubscribe) {
       await this.subscribeToUser(user.uid, mediaType);
     }
+
+    // === [新增] 针对 Bot 用户的订阅状态检查和重试机制 ===
+    if (mediaType === "audio" && window.WebUIDValidator?.isBotUser(user.uid)) {
+      // 检查当前状态：如果订阅失败或 user.hasAudio 为 false
+      const isSubscribed = this._isAlreadySubscribed(user.uid, mediaType);
+      const hasAudioTrack = user.hasAudio;
+
+      if (!isSubscribed && !hasAudioTrack) {
+        this._log("warn", `Bot用户 ${user.uid} 发布音频，但 hasAudio 为 false，启动重试机制...`);
+        this._scheduleBotSubscriptionRetry(user.uid, mediaType);
+      } else if (!isSubscribed && hasAudioTrack) {
+        // 理论上，如果 hasAudio 为 true，subscribeToUser 应该已尝试订阅
+        // 但这里再确认一下，以防万一
+        this._log("info", `Bot用户 ${user.uid} hasAudio 为 true，但尚未订阅，再次尝试...`);
+        try {
+          await this.subscribeToUser(user.uid, mediaType);
+        } catch (error) {
+          // 如果再次失败，启动重试
+          this._log("warn", `Bot用户 ${user.uid} 初始订阅失败，启动重试机制...`, error);
+          this._scheduleBotSubscriptionRetry(user.uid, mediaType);
+        }
+      }
+      // 如果已经订阅，则不需要重试
+    }
+  }
+ /**
+   * 新增：为 Bot 用户安排订阅重试
+   * @param {string|number} uid - Bot 用户的 UID
+   * @param {string} mediaType - 媒体类型，通常是 "audio"
+   */
+  _scheduleBotSubscriptionRetry(uid, mediaType) {
+    // 清除可能存在的旧重试任务
+    this._clearBotSubscriptionRetry(uid);
+
+    const maxAttempts = this.options.maxRetryAttempts || 3;
+    const retryDelay = this.options.retryDelay || 2000; // 使用配置的延迟
+
+    let attempts = 0;
+
+    const retry = async () => {
+      attempts++;
+      this._log("info", `重试订阅Bot用户 ${uid} 的 ${mediaType} (尝试 ${attempts}/${maxAttempts})`);
+
+      const subscriptionInfo = this.subscriptions.get(uid);
+      if (subscriptionInfo && subscriptionInfo.user) {
+        const user = subscriptionInfo.user;
+        const hasAudioTrack = user.hasAudio;
+        const isSubscribed = this._isAlreadySubscribed(uid, mediaType);
+
+        this._log("debug", `Bot用户 ${uid} 当前状态: hasAudio=${hasAudioTrack}, isSubscribed=${isSubscribed}`);
+
+        if (hasAudioTrack && !isSubscribed) {
+          this._log("info", `Bot用户 ${uid} 音频轨道现在可用，尝试订阅...`);
+          try {
+            const success = await this.subscribeToUser(uid, mediaType);
+            if (success) {
+              this._log("info", `✅ Bot用户 ${uid} 的 ${mediaType} 重试订阅成功！`);
+              // 订阅成功后，清除重试任务
+              this._clearBotSubscriptionRetry(uid);
+              return; // 成功后退出
+            } else {
+              this._log("warn", `Bot用户 ${uid} 重试订阅失败 (API返回false)`);
+            }
+          } catch (error) {
+            this._log("error", `Bot用户 ${uid} 重试订阅失败 (捕获异常): ${error.message}`);
+          }
+        } else {
+          if (!hasAudioTrack) {
+            this._log("debug", `Bot用户 ${uid} 音频轨道仍不可用 (hasAudio=${hasAudioTrack})`);
+          } else if (isSubscribed) {
+            this._log("info", `Bot用户 ${uid} 已经订阅，停止重试。`);
+            this._clearBotSubscriptionRetry(uid); // 清理，以防万一
+            return; // 已订阅，退出
+          }
+        }
+      } else {
+        this._log("warn", `Bot用户 ${uid} 在重试时信息缺失，停止重试。`);
+      }
+
+      // 如果未达到最大重试次数，安排下一次重试
+      if (attempts < maxAttempts) {
+        const timerId = setTimeout(retry, retryDelay);
+        this.retryTimers.set(uid, timerId); // 重用 retryTimers Map
+        this._log("debug", `为Bot用户 ${uid} 设置下次重试定时器 (ID: ${timerId})`);
+      } else {
+        this._log("error", `Bot用户 ${uid} 达到最大重试次数 (${maxAttempts})，放弃订阅。`);
+        this._clearBotSubscriptionRetry(uid); // 清理
+      }
+    };
+
+    // 立即执行第一次重试（或稍后执行，取决于 delay）
+    const initialTimerId = setTimeout(retry, retryDelay); // 首次也延迟一下，给SDK更多同步时间
+    this.retryTimers.set(uid, initialTimerId);
+    this._log("debug", `为Bot用户 ${uid} 启动初始重试定时器 (ID: ${initialTimerId})`);
   }
 
+  /**
+   * 新增：清除 Bot 用户的订阅重试任务
+   * @param {string|number} uid - Bot 用户的 UID
+   */
+  _clearBotSubscriptionRetry(uid) {
+    const timerId = this.retryTimers.get(uid);
+    if (timerId) {
+      clearTimeout(timerId);
+      this.retryTimers.delete(uid);
+      this._log("debug", `清除Bot用户 ${uid} 的重试定时器 (ID: ${timerId})`);
+    }
+  }
   /**
    * 处理用户取消发布事件
    */

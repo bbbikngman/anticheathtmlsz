@@ -813,6 +813,17 @@
           // 成功 join 并完成其他准备后
           bindClientEvents();
 
+          // --- 新增：加入后主动检查Bot用户并可能启动重试 ---
+          if (subscriptionManager) {
+            // 可以选择性地延迟一下，确保 SDK 状态更稳定，或者直接调用
+            // setTimeout(() => {
+              subscriptionManager.checkBotUsersForRetry();
+            // }, 100); // 延迟 100ms，可选
+          } else {
+            console.warn("SubscriptionManager 未找到，无法检查Bot用户重试。");
+          }
+          // --- 新增结束 ---
+
           setConnectionState("online", "声网链路已建立，等待 Bot 音频...");
           elements.disconnectButton.disabled = false;
           log("系统", "连接完成，Bot 音频将自动播放");

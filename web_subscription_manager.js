@@ -144,23 +144,23 @@ class WebSubscriptionManager {
       await this.subscribeToUser(user.uid, mediaType);
     }
 
-    // === [新增] 针对 Bot 用户的订阅状态检查和重试机制 ===
+    // === [增强] 针对 Bot 用户的订阅状态检查和重试机制 ===
     if (mediaType === "audio" && window.WebUIDValidator?.isBotUser(user.uid)) {
       // 检查当前状态：如果订阅失败或 user.hasAudio 为 false
       const isSubscribed = this._isAlreadySubscribed(user.uid, mediaType);
       const hasAudioTrack = user.hasAudio;
 
       if (!isSubscribed && !hasAudioTrack) {
-        this._log("warn", `Bot用户 ${user.uid} 发布音频，但 hasAudio 为 false，启动重试机制...`);
+        this._log("warn", `Bot用户 ${user.uid} 发布音频，但 Agora SDK 状态显示 hasAudio 为 false，启动重试机制...`);
+        // 立即尝试一次订阅，以防万一
+        // await this.subscribeToUser(user.uid, mediaType); // 可选：先尝试一次
         this._scheduleBotSubscriptionRetry(user.uid, mediaType);
       } else if (!isSubscribed && hasAudioTrack) {
-        // 理论上，如果 hasAudio 为 true，subscribeToUser 应该已尝试订阅
-        // 但这里再确认一下，以防万一
-        this._log("info", `Bot用户 ${user.uid} hasAudio 为 true，但尚未订阅，再次尝试...`);
+        // 如果 hasAudio 为 true，但尚未订阅，则尝试订阅
+        this._log("info", `Bot用户 ${user.uid} hasAudio 为 true，但尚未订阅，尝试订阅...`);
         try {
           await this.subscribeToUser(user.uid, mediaType);
         } catch (error) {
-          // 如果再次失败，启动重试
           this._log("warn", `Bot用户 ${user.uid} 初始订阅失败，启动重试机制...`, error);
           this._scheduleBotSubscriptionRetry(user.uid, mediaType);
         }
@@ -168,6 +168,7 @@ class WebSubscriptionManager {
       // 如果已经订阅，则不需要重试
     }
   }
+
  /**
    * 新增：为 Bot 用户安排订阅重试
    * @param {string|number} uid - Bot 用户的 UID
@@ -177,8 +178,8 @@ class WebSubscriptionManager {
     // 清除可能存在的旧重试任务
     this._clearBotSubscriptionRetry(uid);
 
-    const maxAttempts = this.options.maxRetryAttempts || 3;
-    const retryDelay = this.options.retryDelay || 2000; // 使用配置的延迟
+    const maxAttempts = this.options.maxRetryAttempts || 5; // 增加重试次数
+    const retryDelay = this.options.retryDelay || 1000; // 重试间隔 1 秒
 
     let attempts = 0;
 
@@ -186,16 +187,16 @@ class WebSubscriptionManager {
       attempts++;
       this._log("info", `重试订阅Bot用户 ${uid} 的 ${mediaType} (尝试 ${attempts}/${maxAttempts})`);
 
-      const subscriptionInfo = this.subscriptions.get(uid);
-      if (subscriptionInfo && subscriptionInfo.user) {
-        const user = subscriptionInfo.user;
-        const hasAudioTrack = user.hasAudio;
+      // 从 Agora 客户端重新获取用户信息
+      const agoraUser = this.client.remoteUsers.find(u => u.uid === uid);
+      if (agoraUser) {
+        const hasAudioTrack = agoraUser.hasAudio;
         const isSubscribed = this._isAlreadySubscribed(uid, mediaType);
 
-        this._log("debug", `Bot用户 ${uid} 当前状态: hasAudio=${hasAudioTrack}, isSubscribed=${isSubscribed}`);
+        this._log("debug", `Bot用户 ${uid} Agora SDK 状态: hasAudio=${hasAudioTrack}, 本地订阅状态=${isSubscribed}`);
 
         if (hasAudioTrack && !isSubscribed) {
-          this._log("info", `Bot用户 ${uid} 音频轨道现在可用，尝试订阅...`);
+          this._log("info", `Bot用户 ${uid} Agora SDK 显示音频轨道可用，尝试订阅...`);
           try {
             const success = await this.subscribeToUser(uid, mediaType);
             if (success) {
@@ -211,7 +212,7 @@ class WebSubscriptionManager {
           }
         } else {
           if (!hasAudioTrack) {
-            this._log("debug", `Bot用户 ${uid} 音频轨道仍不可用 (hasAudio=${hasAudioTrack})`);
+            this._log("debug", `Bot用户 ${uid} Agora SDK 音频轨道仍不可用 (hasAudio=${hasAudioTrack})`);
           } else if (isSubscribed) {
             this._log("info", `Bot用户 ${uid} 已经订阅，停止重试。`);
             this._clearBotSubscriptionRetry(uid); // 清理，以防万一
@@ -219,13 +220,15 @@ class WebSubscriptionManager {
           }
         }
       } else {
-        this._log("warn", `Bot用户 ${uid} 在重试时信息缺失，停止重试。`);
+        this._log("warn", `Bot用户 ${uid} 在重试时已不在频道内，停止重试。`);
+        this._clearBotSubscriptionRetry(uid); // 清理
+        return; // 用户已离开，退出
       }
 
       // 如果未达到最大重试次数，安排下一次重试
       if (attempts < maxAttempts) {
         const timerId = setTimeout(retry, retryDelay);
-        this.retryTimers.set(uid, timerId); // 重用 retryTimers Map
+        this.retryTimers.set(uid, timerId);
         this._log("debug", `为Bot用户 ${uid} 设置下次重试定时器 (ID: ${timerId})`);
       } else {
         this._log("error", `Bot用户 ${uid} 达到最大重试次数 (${maxAttempts})，放弃订阅。`);
@@ -234,12 +237,13 @@ class WebSubscriptionManager {
     };
 
     // 立即执行第一次重试（或稍后执行，取决于 delay）
-    const initialTimerId = setTimeout(retry, retryDelay); // 首次也延迟一下，给SDK更多同步时间
+    // 给 Agora SDK 一点时间来同步状态，所以第一次也延迟一下
+    const initialTimerId = setTimeout(retry, retryDelay);
     this.retryTimers.set(uid, initialTimerId);
     this._log("debug", `为Bot用户 ${uid} 启动初始重试定时器 (ID: ${initialTimerId})`);
   }
 
-  /**
+   /**
    * 新增：清除 Bot 用户的订阅重试任务
    * @param {string|number} uid - Bot 用户的 UID
    */
@@ -251,6 +255,7 @@ class WebSubscriptionManager {
       this._log("debug", `清除Bot用户 ${uid} 的重试定时器 (ID: ${timerId})`);
     }
   }
+  
   /**
    * 处理用户取消发布事件
    */

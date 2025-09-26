@@ -255,7 +255,7 @@ class WebSubscriptionManager {
       this._log("debug", `清除Bot用户 ${uid} 的重试定时器 (ID: ${timerId})`);
     }
   }
-  
+
   /**
    * 处理用户取消发布事件
    */
@@ -277,7 +277,27 @@ class WebSubscriptionManager {
       }
     }
   }
-
+/**
+   * 新增：检查频道内用户，对Bot用户启动重试（用于加入后立即检查）
+   * 这个方法可以由外部调用，例如在 join 成功后
+   */
+  checkBotUsersForRetry() {
+    this._log("info", "检查频道内所有Bot用户，启动可能的订阅重试...");
+    const agoraUsers = this.client.remoteUsers;
+    for (const agoraUser of agoraUsers) {
+      if (agoraUser.hasAudio && window.WebUIDValidator?.isBotUser(agoraUser.uid)) {
+        const subscriptionInfo = this.subscriptions.get(agoraUser.uid);
+        const isSubscribed = this._isAlreadySubscribed(agoraUser.uid, "audio");
+        // 如果 Bot 用户存在、有音频、但本地未订阅，则启动重试
+        if (!isSubscribed) {
+          this._log("info", `检测到未订阅的Bot用户 ${agoraUser.uid}，启动重试机制...`);
+          this._scheduleBotSubscriptionRetry(agoraUser.uid, "audio");
+        } else {
+          this._log("debug", `Bot用户 ${agoraUser.uid} 已订阅或订阅信息存在，跳过。`);
+        }
+      }
+    }
+  }
   /**
    * 处理用户离开事件
    */

@@ -85,6 +85,36 @@ class WebSubscriptionManager {
     
 
     this._log("info", "显式订阅管理器初始化完成", { options: this.options });
+    
+    // 补种：把 join 之前已经在频道里的远端用户收录进来
+    this._seedExistingRemoteUsers();
+  }
+
+  /**
+   * 补种已存在的远端用户
+   * 解决在 join 后创建订阅管理器时错过已在频道用户的问题
+   */
+  _seedExistingRemoteUsers() {
+    const users = this.client.remoteUsers || [];
+    this._log("info", `开始补种已存在的远端用户，共 ${users.length} 个用户`);
+    
+    for (const u of users) {
+      const uid = normalizeUID(u.uid);
+      if (!this.subscriptions.has(uid)) {
+        this._updateSubscriptionInfo(u.uid, {
+          user: u,
+          hasAudio: u.hasAudio,
+          hasVideo: u.hasVideo,
+          state: WebSubscriptionManager.SubscriptionState.NOT_SUBSCRIBED,
+          joinedAt: new Date(),
+        });
+        this._log("debug", `补种远端用户 ${u.uid}（hasAudio=${u.hasAudio}, hasVideo=${u.hasVideo}）`);
+      } else {
+        this._log("debug", `用户 ${u.uid} 已存在于订阅记录中，跳过补种`);
+      }
+    }
+    
+    this._log("info", `补种完成，当前订阅记录中共有 ${this.subscriptions.size} 个用户`);
   }
 
   /**
@@ -365,10 +395,24 @@ class WebSubscriptionManager {
    */
   async subscribeToUser(uid, mediaType = "audio", options = {}) {
     const normalizedUID = normalizeUID(uid);
-    const subscriptionInfo = this.subscriptions.get(normalizedUID);
+    let subscriptionInfo = this.subscriptions.get(normalizedUID);
     if (!subscriptionInfo) {
-      this._log("error", `用户 ${uid} 不存在，无法订阅`);
-      return false;
+      // 兜底：用 SDK 当前远端列表补登记
+      const userFromSDK = findRemoteUser(this.client, uid);
+      if (userFromSDK) {
+        this._updateSubscriptionInfo(uid, {
+          user: userFromSDK,
+          hasAudio: userFromSDK.hasAudio,
+          hasVideo: userFromSDK.hasVideo,
+          state: WebSubscriptionManager.SubscriptionState.NOT_SUBSCRIBED,
+          joinedAt: new Date(),
+        });
+        subscriptionInfo = this.subscriptions.get(normalizeUID(uid));
+        this._log("debug", `兜底登记用户 ${uid}（来自 client.remoteUsers）`);
+      } else {
+        this._log("error", `用户 ${uid} 不存在，无法订阅`);
+        return false;
+      }
     }
 
     const user = subscriptionInfo.user;

@@ -3,6 +3,31 @@
  * 基于声网技术支持的专业建议实现
  */
 
+/**
+ * UID 处理辅助函数
+ * 解决后端返回的 UID 可能是字符串或数字，而 Agora SDK 中的 UID 类型不一致的问题
+ */
+function normalizeUID(uid) {
+  return String(uid);
+}
+
+/**
+ * 在远端用户列表中查找指定 UID 的用户
+ * 使用字符串化比较避免类型不匹配问题
+ */
+function findRemoteUser(client, targetUid) {
+  const normalizedTarget = normalizeUID(targetUid);
+  return client.remoteUsers.find(u => normalizeUID(u.uid) === normalizedTarget);
+}
+
+/**
+ * 比较两个 UID 是否相等
+ * 使用字符串化比较避免类型不匹配问题
+ */
+function isUIDEqual(uid1, uid2) {
+  return normalizeUID(uid1) === normalizeUID(uid2);
+}
+
 class WebSubscriptionManager {
   /**
    * 订阅状态枚举
@@ -122,7 +147,8 @@ class WebSubscriptionManager {
     });
 
     // 更新用户媒体状态
-    const subscriptionInfo = this.subscriptions.get(user.uid);
+    const normalizedUID = normalizeUID(user.uid);
+    const subscriptionInfo = this.subscriptions.get(normalizedUID);
     if (subscriptionInfo) {
       subscriptionInfo.hasAudio = user.hasAudio;
       subscriptionInfo.hasVideo = user.hasVideo;
@@ -188,7 +214,7 @@ class WebSubscriptionManager {
       this._log("info", `重试订阅Bot用户 ${uid} 的 ${mediaType} (尝试 ${attempts}/${maxAttempts})`);
 
       // 从 Agora 客户端重新获取用户信息
-      const agoraUser = this.client.remoteUsers.find(u => u.uid === uid);
+      const agoraUser = findRemoteUser(this.client, uid);
       if (agoraUser) {
         const hasAudioTrack = agoraUser.hasAudio;
         const isSubscribed = this._isAlreadySubscribed(uid, mediaType);
@@ -266,7 +292,8 @@ class WebSubscriptionManager {
     });
 
     // 更新订阅状态
-    const subscriptionInfo = this.subscriptions.get(user.uid);
+    const normalizedUID = normalizeUID(user.uid);
+    const subscriptionInfo = this.subscriptions.get(normalizedUID);
     if (subscriptionInfo) {
       if (mediaType === "audio") {
         subscriptionInfo.hasAudio = false;
@@ -286,7 +313,8 @@ class WebSubscriptionManager {
     const agoraUsers = this.client.remoteUsers;
     for (const agoraUser of agoraUsers) {
       if (agoraUser.hasAudio && window.WebUIDValidator?.isBotUser(agoraUser.uid)) {
-        const subscriptionInfo = this.subscriptions.get(agoraUser.uid);
+        const normalizedUID = normalizeUID(agoraUser.uid);
+        const subscriptionInfo = this.subscriptions.get(normalizedUID);
         const isSubscribed = this._isAlreadySubscribed(agoraUser.uid, "audio");
         // 如果 Bot 用户存在、有音频、但本地未订阅，则启动重试
         if (!isSubscribed) {
@@ -336,7 +364,8 @@ class WebSubscriptionManager {
    * 订阅用户媒体流
    */
   async subscribeToUser(uid, mediaType = "audio", options = {}) {
-    const subscriptionInfo = this.subscriptions.get(uid);
+    const normalizedUID = normalizeUID(uid);
+    const subscriptionInfo = this.subscriptions.get(normalizedUID);
     if (!subscriptionInfo) {
       this._log("error", `用户 ${uid} 不存在，无法订阅`);
       return false;
@@ -499,7 +528,8 @@ class WebSubscriptionManager {
    * 取消订阅用户媒体流
    */
   async unsubscribeFromUser(uid, mediaType = "audio") {
-    const subscriptionInfo = this.subscriptions.get(uid);
+    const normalizedUID = normalizeUID(uid);
+    const subscriptionInfo = this.subscriptions.get(normalizedUID);
     if (!subscriptionInfo) {
       this._log("warn", `用户 ${uid} 不存在，无法取消订阅`);
       return false;
@@ -548,7 +578,8 @@ class WebSubscriptionManager {
    * 检查是否已经订阅
    */
   _isAlreadySubscribed(uid, mediaType) {
-    const subscriptionInfo = this.subscriptions.get(uid);
+    const normalizedUID = normalizeUID(uid);
+    const subscriptionInfo = this.subscriptions.get(normalizedUID);
     if (!subscriptionInfo) return false;
 
     if (mediaType === "audio") {
@@ -564,16 +595,18 @@ class WebSubscriptionManager {
    * 更新订阅信息
    */
   _updateSubscriptionInfo(uid, info) {
-    const existing = this.subscriptions.get(uid) || {};
+    const normalizedUID = normalizeUID(uid);
+    const existing = this.subscriptions.get(normalizedUID) || {};
     const updated = { ...existing, ...info, updatedAt: new Date() };
-    this.subscriptions.set(uid, updated);
+    this.subscriptions.set(normalizedUID, updated);
   }
 
   /**
    * 更新订阅状态
    */
   _updateSubscriptionState(uid, mediaType, state) {
-    const subscriptionInfo = this.subscriptions.get(uid);
+    const normalizedUID = normalizeUID(uid);
+    const subscriptionInfo = this.subscriptions.get(normalizedUID);
     if (!subscriptionInfo) return;
 
     if (mediaType === "audio") {
@@ -679,7 +712,8 @@ class WebSubscriptionManager {
    * 获取用户订阅信息
    */
   getUserSubscriptionInfo(uid) {
-    const info = this.subscriptions.get(uid);
+    const normalizedUID = normalizeUID(uid);
+    const info = this.subscriptions.get(normalizedUID);
     if (!info) return null;
 
     return {

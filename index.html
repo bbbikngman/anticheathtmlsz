@@ -601,7 +601,7 @@
         updateWebSocketStatus('connecting', '连接中...');
         
         try {
-          debugWebSocket = new WebSocket('ws://localhost:8765');
+          debugWebSocket = new WebSocket('ws://58.250.98.85:31004');
           
           debugWebSocket.onopen = function(event) {
             console.log('[WebSocket] 连接成功');

@@ -563,7 +563,7 @@
           // 检查是否是新的assistant_text消息格式（优先处理）
           if (jsonMessage.type === 'assistant_text' && jsonMessage.data && jsonMessage.data.text) {
             const text = jsonMessage.data.text.trim();
-            const kind = jsonMessage.data.kind || 'unknown';
+            const kind = jsonMessage.data.kind || 'llm'; // 默认作为LLM消息处理
             console.log('[WebSocket] 解析assistant_text消息:', text, '类型:', kind);
             
             // 根据kind类型返回相应的消息类型
@@ -579,7 +579,7 @@
               };
             } else {
               return {
-                type: 'info',
+                type: 'llm', // 未知类型也作为LLM消息处理
                 content: text
               };
             }
@@ -629,6 +629,14 @@
                 content: debugText
               };
             }
+          }
+          
+          // 检查是否是ping消息
+          if (jsonMessage.type === 'ping') {
+            return {
+              type: 'ping',
+              content: 'ping'
+            };
           }
           
           // 处理其他类型的JSON消息
@@ -733,7 +741,19 @@
               const parsed = parseDebugMessage(event.data);
               console.log('[WebSocket] 解析后的消息:', parsed);
               
-              if (parsed.type === 'stt') {
+              if (parsed.type === 'ping') {
+                // 响应ping消息，发送pong
+                try {
+                  const pongMessage = JSON.stringify({
+                    type: 'pong',
+                    data: {}
+                  });
+                  debugWebSocket.send(pongMessage);
+                  console.log('[WebSocket] 💓 收到ping，已发送pong响应');
+                } catch (error) {
+                  console.error('[WebSocket] 发送pong响应失败:', error);
+                }
+              } else if (parsed.type === 'stt') {
                 log('STT', parsed.content, 'stt');
                 console.log('[WebSocket] STT消息已处理:', parsed.content);
               } else if (parsed.type === 'llm') {

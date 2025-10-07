@@ -390,6 +390,13 @@
       </section>
 
       <section class="controls">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <label style="font-weight: 600; color: #2d3748;">对话模式：</label>
+          <select id="modeSelect" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e0; background: white; font-size: 0.9rem;">
+            <option value="AUDIO">音频对话模式</option>
+            <option value="TEXT_ONLY">纯文本模式</option>
+          </select>
+        </div>
         <button id="connectButton" class="primary">开始对话</button>
         <button id="disconnectButton" class="danger" disabled>断开连接</button>
       </section>
@@ -410,6 +417,18 @@
         <label for="volumeSlider">Bot 音量</label>
         <input id="volumeSlider" type="range" min="0" max="100" value="70" />
       </div>
+
+      <!-- 文本输入区域（仅在TEXT_ONLY模式下显示） -->
+      <section id="textInputSection" class="text-input-section" style="display: none; margin-bottom: 20px;">
+        <div style="display: flex; gap: 12px; align-items: flex-end;">
+          <div style="flex: 1;">
+            <label for="textInput" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2d3748;">输入消息：</label>
+            <textarea id="textInput" placeholder="在纯文本模式下输入您的消息..." 
+                      style="width: 100%; padding: 12px; border: 1px solid #cbd5e0; border-radius: 8px; resize: vertical; min-height: 80px; font-size: 0.9rem;"></textarea>
+          </div>
+          <button id="sendTextButton" class="primary" style="padding: 12px 20px; height: fit-content;">发送</button>
+        </div>
+      </section>
 
       <section class="conversation-log" id="logContainer"></section>
 
@@ -445,6 +464,9 @@
       let wsReconnectAttempts = 0;
       const WS_MAX_RECONNECT_ATTEMPTS = 5;
       const WS_RECONNECT_DELAY = 3000;
+      
+      // 当前对话模式
+      let currentMode = "AUDIO"; // AUDIO 或 TEXT_ONLY
 
       const elements = {
         connectionStatus: document.getElementById("connectionStatus"),
@@ -462,6 +484,10 @@
         wsStatus: document.getElementById("wsStatus"),
         wsStatusText: document.getElementById("wsStatusText"),
         wsMessageCount: document.getElementById("wsMessageCount"),
+        modeSelect: document.getElementById("modeSelect"),
+        textInputSection: document.getElementById("textInputSection"),
+        textInput: document.getElementById("textInput"),
+        sendTextButton: document.getElementById("sendTextButton"),
       };
 
       function log(source, message, type = "info") {
@@ -554,41 +580,131 @@
 
       // 解析WebSocket调试消息
       function parseDebugMessage(message) {
-        const text = message.trim();
-        
-        // 匹配不同类型的调试消息
-        if (text.startsWith('[LLM_DEBUG]')) {
-          return {
-            type: 'llm',
-            content: text.replace('[LLM_DEBUG]', '').trim()
-          };
-        } else if (text.startsWith('[STT_DEBUG]')) {
-          return {
-            type: 'stt',
-            content: text.replace('[STT_DEBUG]', '').trim()
-          };
-        } else if (text.includes('ERROR')) {
-          // 匹配各种错误类型
-          const errorTypes = ['VAD_ERROR', 'STT_ERROR', 'LLM_ERROR', 'TTS_ERROR'];
-          for (const errorType of errorTypes) {
-            if (text.includes(`[${errorType}]`)) {
+        try {
+          // 尝试解析JSON格式的消息
+          const jsonMessage = JSON.parse(message);
+          
+          // 检查是否是新的assistant_text消息格式（优先处理）
+          if (jsonMessage.type === 'assistant_text' && jsonMessage.data && jsonMessage.data.text) {
+            const text = jsonMessage.data.text.trim();
+            const kind = jsonMessage.data.kind || 'unknown';
+            console.log('[WebSocket] 解析assistant_text消息:', text, '类型:', kind);
+            
+            // 根据kind类型返回相应的消息类型
+            if (kind === 'welcome' || kind === 'llm') {
               return {
-                type: 'error',
-                source: errorType.replace('_ERROR', ''),
-                content: text.replace(`[${errorType}]`, '').trim()
+                type: 'llm',
+                content: text
+              };
+            } else if (kind === 'stt') {
+              return {
+                type: 'stt',
+                content: text
+              };
+            } else {
+              return {
+                type: 'info',
+                content: text
               };
             }
           }
-          return {
-            type: 'error',
-            source: '系统',
-            content: text
-          };
-        } else {
+          
+          // 检查是否是旧的调试消息格式
+          if (jsonMessage.type === 'debug' && jsonMessage.data && jsonMessage.data.message) {
+            const debugText = jsonMessage.data.message.trim();
+            console.log('[WebSocket] 解析JSON调试消息:', debugText);
+            
+            // 解析调试消息内容
+            if (debugText.startsWith('[LLM_DEBUG]')) {
+              return {
+                type: 'llm',
+                content: debugText.replace('[LLM_DEBUG]', '').trim()
+              };
+            } else if (debugText.startsWith('[STT_DEBUG]')) {
+              return {
+                type: 'stt',
+                content: debugText.replace('[STT_DEBUG]', '').trim()
+              };
+            } else if (debugText.startsWith('[WELCOME]')) {
+              return {
+                type: 'llm',
+                content: debugText.replace('[WELCOME]', '').trim()
+              };
+            } else if (debugText.includes('ERROR')) {
+              // 匹配各种错误类型
+              const errorTypes = ['VAD_ERROR', 'STT_ERROR', 'LLM_ERROR', 'TTS_ERROR'];
+              for (const errorType of errorTypes) {
+                if (debugText.includes(`[${errorType}]`)) {
+                  return {
+                    type: 'error',
+                    source: errorType.replace('_ERROR', ''),
+                    content: debugText.replace(`[${errorType}]`, '').trim()
+                  };
+                }
+              }
+              return {
+                type: 'error',
+                source: '系统',
+                content: debugText
+              };
+            } else {
+              return {
+                type: 'info',
+                content: debugText
+              };
+            }
+          }
+          
+          // 处理其他类型的JSON消息
           return {
             type: 'info',
-            content: text
+            content: `收到JSON消息: ${jsonMessage.type || '未知类型'}`
           };
+          
+        } catch (e) {
+          // 如果不是JSON，按原来的文本格式处理
+          const text = message.trim();
+          console.log('[WebSocket] 解析文本调试消息:', text);
+          
+          // 匹配不同类型的调试消息
+          if (text.startsWith('[LLM_DEBUG]')) {
+            return {
+              type: 'llm',
+              content: text.replace('[LLM_DEBUG]', '').trim()
+            };
+          } else if (text.startsWith('[STT_DEBUG]')) {
+            return {
+              type: 'stt',
+              content: text.replace('[STT_DEBUG]', '').trim()
+            };
+          } else if (text.startsWith('[WELCOME]')) {
+            return {
+              type: 'llm',
+              content: text.replace('[WELCOME]', '').trim()
+            };
+          } else if (text.includes('ERROR')) {
+            // 匹配各种错误类型
+            const errorTypes = ['VAD_ERROR', 'STT_ERROR', 'LLM_ERROR', 'TTS_ERROR'];
+            for (const errorType of errorTypes) {
+              if (text.includes(`[${errorType}]`)) {
+                return {
+                  type: 'error',
+                  source: errorType.replace('_ERROR', ''),
+                  content: text.replace(`[${errorType}]`, '').trim()
+                };
+              }
+            }
+            return {
+              type: 'error',
+              source: '系统',
+              content: text
+            };
+          } else {
+            return {
+              type: 'info',
+              content: text
+            };
+          }
         }
       }
 
@@ -612,23 +728,52 @@
             updateWebSocketStatus('connected', '已连接');
             wsReconnectAttempts = 0;
             log('WebSocket', '调试连接已建立', 'success');
+            
+            // 发送bind消息以绑定客户端
+            try {
+              const bindMessage = JSON.stringify({
+                type: 'bind',
+                data: {
+                  client_id: 'web_console',
+                  client_type: 'web_client'
+                }
+              });
+              debugWebSocket.send(bindMessage);
+              console.log('[WebSocket] 已发送bind消息:', bindMessage);
+            } catch (error) {
+              console.error('[WebSocket] 发送bind消息失败:', error);
+            }
           };
           
           debugWebSocket.onmessage = function(event) {
             wsMessageCount++;
             elements.wsMessageCount.textContent = wsMessageCount;
             
-            const parsed = parseDebugMessage(event.data);
+            // 添加详细的WebSocket消息接收日志
+            console.log('[WebSocket] 收到消息:', event.data);
+            console.log('[WebSocket] 消息计数:', wsMessageCount);
             
-            if (parsed.type === 'stt') {
-              log('STT', parsed.content, 'stt');
-            } else if (parsed.type === 'llm') {
-              log('LLM', parsed.content, 'llm');
-            } else if (parsed.type === 'error') {
-              log(parsed.source, parsed.content, 'error');
-              showErrorPopup(`${parsed.source}错误`, parsed.content);
-            } else {
-              log('调试', parsed.content);
+            try {
+              const parsed = parseDebugMessage(event.data);
+              console.log('[WebSocket] 解析后的消息:', parsed);
+              
+              if (parsed.type === 'stt') {
+                log('STT', parsed.content, 'stt');
+                console.log('[WebSocket] STT消息已处理:', parsed.content);
+              } else if (parsed.type === 'llm') {
+                log('LLM', parsed.content, 'llm');
+                console.log('[WebSocket] LLM消息已处理:', parsed.content);
+              } else if (parsed.type === 'error') {
+                log(parsed.source, parsed.content, 'error');
+                showErrorPopup(`${parsed.source}错误`, parsed.content);
+                console.log('[WebSocket] 错误消息已处理:', parsed.source, parsed.content);
+              } else {
+                log('调试', parsed.content);
+                console.log('[WebSocket] 调试消息已处理:', parsed.content);
+              }
+            } catch (error) {
+              console.error('[WebSocket] 消息解析失败:', error, '原始消息:', event.data);
+              log('WebSocket', `消息解析失败: ${error.message}`, 'error');
             }
           };
           
@@ -845,6 +990,11 @@
           return;
         }
         isConnecting = true;
+        
+        // 获取当前选择的模式
+        currentMode = elements.modeSelect.value;
+        log("系统", `当前模式: ${currentMode === 'TEXT_ONLY' ? '纯文本模式' : '音频对话模式'}`);
+        
         setConnectionState("idle", "正在初始化RTC系统...");
         elements.connectButton.disabled = true;
         log("系统", "开始初始化RTC系统...");
@@ -1041,70 +1191,77 @@
             console.error("[AUDIO_FLOW] 获取音频设备失败:", error);
           }
 
-          console.log("[AUDIO_FLOW] 开始创建麦克风音频轨道...");
-          microphoneAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-            encoderConfig: {
-              sampleRate: 48000,
-              stereo: false,
-            },
-          });
-          localTrack = microphoneAudioTrack; // 保持兼容性
-
-          // [AUDIO_FLOW] 音频轨道创建成功调试日志
-          console.log("[AUDIO_FLOW] 麦克风音频轨道已创建:", {
-            trackId: microphoneAudioTrack.getTrackId(),
-            enabled: microphoneAudioTrack.enabled,
-            muted: microphoneAudioTrack.muted,
-            sampleRate: 48000,
-          });
-
-          await client.publish(microphoneAudioTrack);
-
-          // [AUDIO_FLOW] 音频发布成功调试日志
-          console.log("[AUDIO_FLOW] 本地音频已发布到声网:", {
-            trackId: microphoneAudioTrack.getTrackId(),
-            published: true,
-            clientState: client.connectionState,
-          });
-
-          log("声网", "本地音频已发布");
-
-          // [AUDIO_FLOW] 添加音频数据处理器监听音频流
-          let audioFrameCounter = 0;
-          try {
-            const processor = {
-              process: (audioBuffer) => {
-                audioFrameCounter++;
-                if (audioFrameCounter % 100 === 0) {
-                  console.log(
-                    "[AUDIO_FLOW] 音频数据流经声网SDK (第" +
-                      audioFrameCounter +
-                      "帧):",
-                    {
-                      sampleRate: audioBuffer.sampleRate,
-                      numberOfChannels: audioBuffer.numberOfChannels,
-                      length: audioBuffer.length,
-                      timestamp: Date.now(),
-                    }
-                  );
-                }
-                return audioBuffer;
+          // 只在音频模式下创建和发布音频轨道
+          if (currentMode === "AUDIO") {
+            console.log("[AUDIO_FLOW] 开始创建麦克风音频轨道...");
+            microphoneAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+              encoderConfig: {
+                sampleRate: 48000,
+                stereo: false,
               },
-            };
+            });
+            localTrack = microphoneAudioTrack; // 保持兼容性
 
-            if (localTrack.pipe && typeof localTrack.pipe === "function") {
-              localTrack.pipe(processor);
-              console.log("[AUDIO_FLOW] 音频处理器已添加到本地轨道");
-            } else {
-              console.log(
-                "[AUDIO_FLOW] 本地轨道不支持pipe方法，尝试其他监听方式"
-              );
-            }
-          } catch (error) {
-            console.log("[AUDIO_FLOW] 添加音频处理器失败:", error.message);
+            // [AUDIO_FLOW] 音频轨道创建成功调试日志
+            console.log("[AUDIO_FLOW] 麦克风音频轨道已创建:", {
+              trackId: microphoneAudioTrack.getTrackId(),
+              enabled: microphoneAudioTrack.enabled,
+              muted: microphoneAudioTrack.muted,
+              sampleRate: 48000,
+            });
+
+            await client.publish(microphoneAudioTrack);
+
+            // [AUDIO_FLOW] 音频发布成功调试日志
+            console.log("[AUDIO_FLOW] 本地音频已发布到声网:", {
+              trackId: microphoneAudioTrack.getTrackId(),
+              published: true,
+              clientState: client.connectionState,
+            });
+
+            log("声网", "本地音频已发布");
+          } else {
+            log("系统", "纯文本模式：跳过音频轨道创建");
           }
 
-          startMicMeter(microphoneAudioTrack);
+          // [AUDIO_FLOW] 只在音频模式下添加音频数据处理器监听音频流
+          if (currentMode === "AUDIO" && microphoneAudioTrack) {
+            let audioFrameCounter = 0;
+            try {
+              const processor = {
+                process: (audioBuffer) => {
+                  audioFrameCounter++;
+                  if (audioFrameCounter % 100 === 0) {
+                    console.log(
+                      "[AUDIO_FLOW] 音频数据流经声网SDK (第" +
+                        audioFrameCounter +
+                        "帧):",
+                      {
+                        sampleRate: audioBuffer.sampleRate,
+                        numberOfChannels: audioBuffer.numberOfChannels,
+                        length: audioBuffer.length,
+                        timestamp: Date.now(),
+                      }
+                    );
+                  }
+                  return audioBuffer;
+                },
+              };
+
+              if (localTrack.pipe && typeof localTrack.pipe === "function") {
+                localTrack.pipe(processor);
+                console.log("[AUDIO_FLOW] 音频处理器已添加到本地轨道");
+              } else {
+                console.log(
+                  "[AUDIO_FLOW] 本地轨道不支持pipe方法，尝试其他监听方式"
+                );
+              }
+            } catch (error) {
+              console.log("[AUDIO_FLOW] 添加音频处理器失败:", error.message);
+            }
+
+            startMicMeter(microphoneAudioTrack);
+          }
 
           // 处理 Autoplay 限制
           AgoraRTC.onAutoplayFailed = () => {
@@ -1334,6 +1491,66 @@
           remoteAudioTrack.setVolume(volume);
         }
       });
+
+      // 模式切换事件监听器
+      elements.modeSelect.addEventListener("change", (event) => {
+        const selectedMode = event.target.value;
+        if (selectedMode === "TEXT_ONLY") {
+          elements.textInputSection.style.display = "block";
+          log("系统", "已切换到纯文本模式");
+        } else {
+          elements.textInputSection.style.display = "none";
+          log("系统", "已切换到音频对话模式");
+        }
+      });
+
+      // 发送文本消息事件监听器
+      elements.sendTextButton.addEventListener("click", sendTextMessage);
+      elements.textInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          sendTextMessage();
+        }
+      });
+
+      // 发送文本消息函数
+      async function sendTextMessage() {
+        const text = elements.textInput.value.trim();
+        if (!text) {
+          return;
+        }
+
+        try {
+          // 显示用户输入的消息
+          log("用户", text);
+          
+          // 清空输入框
+          elements.textInput.value = "";
+          
+          // 发送到后端API
+          const response = await fetch(`${API_BASE_URL}/api/rtc/text_input`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+              text: text,
+              session_id: sessionId || "text_only_session"
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          if (!result.ok) {
+            throw new Error(result.error || "发送失败");
+          }
+          
+          log("系统", "消息已发送");
+        } catch (error) {
+          log("错误", `发送消息失败: ${error.message}`, "error");
+        }
+      }
 
       // —— 挂到所有退出路径 ——
       // 1) 关闭/刷新

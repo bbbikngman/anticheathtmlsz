@@ -601,20 +601,10 @@
         updateWebSocketStatus('connecting', '连接中...');
         
         try {
-          // 智能选择WebSocket协议
-          const isHttps = window.location.protocol === 'https:';
-          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          // 直接固定成域名 + /ws（由 Nginx 负责 TLS 和反代）
+          const wsUrl = 'wss://cityuantifraud.cn/ws';
           
-          // 如果是HTTPS页面且不是localhost，优先尝试wss://
-          // 如果是localhost或HTTP页面，使用ws://
-          let wsUrl;
-          if (isHttps && !isLocalhost) {
-            wsUrl = 'wss://58.250.98.85:31004';
-          } else {
-            wsUrl = 'ws://58.250.98.85:31004';
-          }
-          
-          console.log(`[WebSocket] 尝试连接: ${wsUrl} (HTTPS: ${isHttps}, Localhost: ${isLocalhost})`);
+          console.log(`[WebSocket] 尝试连接: ${wsUrl}`);
           debugWebSocket = new WebSocket(wsUrl);
           
           debugWebSocket.onopen = function(event) {

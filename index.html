@@ -390,13 +390,6 @@
       </section>
 
       <section class="controls">
-        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
-          <label style="font-weight: 600; color: #2d3748;">对话模式：</label>
-          <select id="modeSelect" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e0; background: white; font-size: 0.9rem;">
-            <option value="AUDIO">音频对话模式</option>
-            <option value="TEXT_ONLY">纯文本模式</option>
-          </select>
-        </div>
         <button id="connectButton" class="primary">开始对话</button>
         <button id="disconnectButton" class="danger" disabled>断开连接</button>
       </section>
@@ -418,17 +411,7 @@
         <input id="volumeSlider" type="range" min="0" max="100" value="70" />
       </div>
 
-      <!-- 文本输入区域（仅在TEXT_ONLY模式下显示） -->
-      <section id="textInputSection" class="text-input-section" style="display: none; margin-bottom: 20px;">
-        <div style="display: flex; gap: 12px; align-items: flex-end;">
-          <div style="flex: 1;">
-            <label for="textInput" style="display: block; margin-bottom: 8px; font-weight: 600; color: #2d3748;">输入消息：</label>
-            <textarea id="textInput" placeholder="在纯文本模式下输入您的消息..." 
-                      style="width: 100%; padding: 12px; border: 1px solid #cbd5e0; border-radius: 8px; resize: vertical; min-height: 80px; font-size: 0.9rem;"></textarea>
-          </div>
-          <button id="sendTextButton" class="primary" style="padding: 12px 20px; height: fit-content;">发送</button>
-        </div>
-      </section>
+
 
       <section class="conversation-log" id="logContainer"></section>
 
@@ -465,9 +448,6 @@
       const WS_MAX_RECONNECT_ATTEMPTS = 5;
       const WS_RECONNECT_DELAY = 3000;
       
-      // 当前对话模式
-      let currentMode = "AUDIO"; // AUDIO 或 TEXT_ONLY
-
       const elements = {
         connectionStatus: document.getElementById("connectionStatus"),
         statusHint: document.getElementById("statusHint"),
@@ -484,10 +464,6 @@
         wsStatus: document.getElementById("wsStatus"),
         wsStatusText: document.getElementById("wsStatusText"),
         wsMessageCount: document.getElementById("wsMessageCount"),
-        modeSelect: document.getElementById("modeSelect"),
-        textInputSection: document.getElementById("textInputSection"),
-        textInput: document.getElementById("textInput"),
-        sendTextButton: document.getElementById("sendTextButton"),
       };
 
       function log(source, message, type = "info") {
@@ -991,10 +967,6 @@
         }
         isConnecting = true;
         
-        // 获取当前选择的模式
-        currentMode = elements.modeSelect.value;
-        log("系统", `当前模式: ${currentMode === 'TEXT_ONLY' ? '纯文本模式' : '音频对话模式'}`);
-        
         setConnectionState("idle", "正在初始化RTC系统...");
         elements.connectButton.disabled = true;
         log("系统", "开始初始化RTC系统...");
@@ -1191,41 +1163,37 @@
             console.error("[AUDIO_FLOW] 获取音频设备失败:", error);
           }
 
-          // 只在音频模式下创建和发布音频轨道
-          if (currentMode === "AUDIO") {
-            console.log("[AUDIO_FLOW] 开始创建麦克风音频轨道...");
-            microphoneAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-              encoderConfig: {
-                sampleRate: 48000,
-                stereo: false,
-              },
-            });
-            localTrack = microphoneAudioTrack; // 保持兼容性
-
-            // [AUDIO_FLOW] 音频轨道创建成功调试日志
-            console.log("[AUDIO_FLOW] 麦克风音频轨道已创建:", {
-              trackId: microphoneAudioTrack.getTrackId(),
-              enabled: microphoneAudioTrack.enabled,
-              muted: microphoneAudioTrack.muted,
+          // 创建和发布音频轨道
+          console.log("[AUDIO_FLOW] 开始创建麦克风音频轨道...");
+          microphoneAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+            encoderConfig: {
               sampleRate: 48000,
-            });
+              stereo: false,
+            },
+          });
+          localTrack = microphoneAudioTrack; // 保持兼容性
 
-            await client.publish(microphoneAudioTrack);
+          // [AUDIO_FLOW] 音频轨道创建成功调试日志
+          console.log("[AUDIO_FLOW] 麦克风音频轨道已创建:", {
+            trackId: microphoneAudioTrack.getTrackId(),
+            enabled: microphoneAudioTrack.enabled,
+            muted: microphoneAudioTrack.muted,
+            sampleRate: 48000,
+          });
 
-            // [AUDIO_FLOW] 音频发布成功调试日志
-            console.log("[AUDIO_FLOW] 本地音频已发布到声网:", {
-              trackId: microphoneAudioTrack.getTrackId(),
-              published: true,
-              clientState: client.connectionState,
-            });
+          await client.publish(microphoneAudioTrack);
 
-            log("声网", "本地音频已发布");
-          } else {
-            log("系统", "纯文本模式：跳过音频轨道创建");
-          }
+          // [AUDIO_FLOW] 音频发布成功调试日志
+          console.log("[AUDIO_FLOW] 本地音频已发布到声网:", {
+            trackId: microphoneAudioTrack.getTrackId(),
+            published: true,
+            clientState: client.connectionState,
+          });
 
-          // [AUDIO_FLOW] 只在音频模式下添加音频数据处理器监听音频流
-          if (currentMode === "AUDIO" && microphoneAudioTrack) {
+          log("声网", "本地音频已发布");
+
+          // [AUDIO_FLOW] 添加音频数据处理器监听音频流
+          if (microphoneAudioTrack) {
             let audioFrameCounter = 0;
             try {
               const processor = {
@@ -1492,65 +1460,9 @@
         }
       });
 
-      // 模式切换事件监听器
-      elements.modeSelect.addEventListener("change", (event) => {
-        const selectedMode = event.target.value;
-        if (selectedMode === "TEXT_ONLY") {
-          elements.textInputSection.style.display = "block";
-          log("系统", "已切换到纯文本模式");
-        } else {
-          elements.textInputSection.style.display = "none";
-          log("系统", "已切换到音频对话模式");
-        }
-      });
 
-      // 发送文本消息事件监听器
-      elements.sendTextButton.addEventListener("click", sendTextMessage);
-      elements.textInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && !event.shiftKey) {
-          event.preventDefault();
-          sendTextMessage();
-        }
-      });
 
-      // 发送文本消息函数
-      async function sendTextMessage() {
-        const text = elements.textInput.value.trim();
-        if (!text) {
-          return;
-        }
 
-        try {
-          // 显示用户输入的消息
-          log("用户", text);
-          
-          // 清空输入框
-          elements.textInput.value = "";
-          
-          // 发送到后端API
-          const response = await fetch(`${API_BASE_URL}/api/rtc/text_input`, {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-              text: text,
-              session_id: sessionId || "text_only_session"
-            })
-          });
-          
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          
-          const result = await response.json();
-          if (!result.ok) {
-            throw new Error(result.error || "发送失败");
-          }
-          
-          log("系统", "消息已发送");
-        } catch (error) {
-          log("错误", `发送消息失败: ${error.message}`, "error");
-        }
-      }
 
       // —— 挂到所有退出路径 ——
       // 1) 关闭/刷新

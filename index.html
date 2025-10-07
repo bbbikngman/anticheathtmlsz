@@ -206,6 +206,139 @@
         width: 220px;
       }
 
+      .conversation-log {
+        background: #f7fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 16px;
+        margin: 24px 0;
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.9rem;
+      }
+
+      .log-entry {
+        margin-bottom: 8px;
+        padding: 8px;
+        border-radius: 6px;
+        background: white;
+        border-left: 4px solid #cbd5e0;
+      }
+
+      .log-entry.stt {
+        border-left-color: #4299e1;
+        background: #ebf8ff;
+      }
+
+      .log-entry.llm {
+        border-left-color: #48bb78;
+        background: #f0fff4;
+      }
+
+      .log-entry.error {
+        border-left-color: #f56565;
+        background: #fed7d7;
+        color: #c53030;
+      }
+
+      .log-entry time {
+        font-size: 0.8rem;
+        color: #718096;
+        margin-right: 8px;
+      }
+
+      .log-entry .source {
+        font-weight: 600;
+        margin-right: 8px;
+      }
+
+      .log-entry .source.stt {
+        color: #2b6cb0;
+      }
+
+      .log-entry .source.llm {
+        color: #2f855a;
+      }
+
+      .log-entry .source.error {
+        color: #c53030;
+      }
+
+      .error-popup {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #fed7d7;
+        border: 1px solid #feb2b2;
+        border-radius: 8px;
+        padding: 16px;
+        max-width: 400px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+      }
+
+      .error-popup .error-title {
+        font-weight: 600;
+        color: #c53030;
+        margin-bottom: 8px;
+      }
+
+      .error-popup .error-message {
+        color: #742a2a;
+        font-size: 0.9rem;
+      }
+
+      .error-popup .close-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        color: #c53030;
+        cursor: pointer;
+        padding: 4px;
+      }
+
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+
+      .websocket-status {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
+
+      .websocket-status.connected {
+        background: #48bb78;
+      }
+
+      .websocket-status.disconnected {
+        background: #f56565;
+      }
+
+      .websocket-status.connecting {
+        background: #ed8936;
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
       footer {
         margin-top: 24px;
         text-align: center;
@@ -245,6 +378,13 @@
           <div class="status-value">
             <div>远端 UID：<span id="remoteUid">-</span></div>
             <div>音量：<span id="remoteVolume">70%</span></div>
+          </div>
+        </div>
+        <div class="status-card">
+          <h2>调试连接</h2>
+          <div class="status-value">
+            <div><span class="websocket-status disconnected" id="wsStatus"></span>WebSocket：<span id="wsStatusText">未连接</span></div>
+            <div>消息数：<span id="wsMessageCount">0</span></div>
           </div>
         </div>
       </section>
@@ -298,6 +438,14 @@
       let micDataArray = null;
       let meterAnimation = null;
 
+      // WebSocket相关变量
+      let debugWebSocket = null;
+      let wsReconnectTimer = null;
+      let wsMessageCount = 0;
+      let wsReconnectAttempts = 0;
+      const WS_MAX_RECONNECT_ATTEMPTS = 5;
+      const WS_RECONNECT_DELAY = 3000;
+
       const elements = {
         connectionStatus: document.getElementById("connectionStatus"),
         statusHint: document.getElementById("statusHint"),
@@ -311,21 +459,49 @@
         micLevel: document.getElementById("micLevel"),
         micBar: document.getElementById("micBar"),
         logContainer: document.getElementById("logContainer"),
+        wsStatus: document.getElementById("wsStatus"),
+        wsStatusText: document.getElementById("wsStatusText"),
+        wsMessageCount: document.getElementById("wsMessageCount"),
       };
 
       function log(source, message, type = "info") {
         const entry = document.createElement("div");
         entry.className = "log-entry";
         const timestamp = new Date().toLocaleTimeString();
-        entry.innerHTML = `
-          <time>${timestamp}</time>
-          <div><strong>${source}</strong>${message}</div>
-        `;
-        if (type === "error") {
-          entry.style.color = "#c53030";
-        } else if (type === "success") {
-          entry.style.color = "#2f855a";
+        
+        // 根据消息类型设置样式
+        if (type === "stt" || source === "STT") {
+          entry.classList.add("stt");
+          entry.innerHTML = `
+            <time>${timestamp}</time>
+            <span class="source stt">语音识别</span>
+            <div>${message}</div>
+          `;
+        } else if (type === "llm" || source === "LLM") {
+          entry.classList.add("llm");
+          entry.innerHTML = `
+            <time>${timestamp}</time>
+            <span class="source llm">AI回复</span>
+            <div>${message}</div>
+          `;
+        } else if (type === "error") {
+          entry.classList.add("error");
+          entry.innerHTML = `
+            <time>${timestamp}</time>
+            <span class="source error">${source}</span>
+            <div>${message}</div>
+          `;
+        } else {
+          entry.innerHTML = `
+            <time>${timestamp}</time>
+            <span class="source">${source}</span>
+            <div>${message}</div>
+          `;
+          if (type === "success") {
+            entry.style.color = "#2f855a";
+          }
         }
+        
         elements.logContainer.appendChild(entry);
         elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
       }
@@ -342,6 +518,160 @@
         if (hint) {
           elements.statusHint.textContent = hint;
         }
+      }
+
+      // WebSocket状态更新函数
+      function updateWebSocketStatus(status, text) {
+        elements.wsStatus.className = `websocket-status ${status}`;
+        elements.wsStatusText.textContent = text;
+      }
+
+      // 显示错误弹窗
+      function showErrorPopup(title, message) {
+        // 移除已存在的错误弹窗
+        const existingPopup = document.querySelector('.error-popup');
+        if (existingPopup) {
+          existingPopup.remove();
+        }
+
+        const popup = document.createElement('div');
+        popup.className = 'error-popup';
+        popup.innerHTML = `
+          <button class="close-btn" onclick="this.parentElement.remove()">×</button>
+          <div class="error-title">${title}</div>
+          <div class="error-message">${message}</div>
+        `;
+        
+        document.body.appendChild(popup);
+        
+        // 5秒后自动关闭
+        setTimeout(() => {
+          if (popup.parentElement) {
+            popup.remove();
+          }
+        }, 5000);
+      }
+
+      // 解析WebSocket调试消息
+      function parseDebugMessage(message) {
+        const text = message.trim();
+        
+        // 匹配不同类型的调试消息
+        if (text.startsWith('[LLM_DEBUG]')) {
+          return {
+            type: 'llm',
+            content: text.replace('[LLM_DEBUG]', '').trim()
+          };
+        } else if (text.startsWith('[STT_DEBUG]')) {
+          return {
+            type: 'stt',
+            content: text.replace('[STT_DEBUG]', '').trim()
+          };
+        } else if (text.includes('ERROR')) {
+          // 匹配各种错误类型
+          const errorTypes = ['VAD_ERROR', 'STT_ERROR', 'LLM_ERROR', 'TTS_ERROR'];
+          for (const errorType of errorTypes) {
+            if (text.includes(`[${errorType}]`)) {
+              return {
+                type: 'error',
+                source: errorType.replace('_ERROR', ''),
+                content: text.replace(`[${errorType}]`, '').trim()
+              };
+            }
+          }
+          return {
+            type: 'error',
+            source: '系统',
+            content: text
+          };
+        } else {
+          return {
+            type: 'info',
+            content: text
+          };
+        }
+      }
+
+      // 连接WebSocket
+      function connectWebSocket() {
+        if (debugWebSocket && debugWebSocket.readyState === WebSocket.OPEN) {
+          return; // 已经连接
+        }
+
+        updateWebSocketStatus('connecting', '连接中...');
+        
+        try {
+          debugWebSocket = new WebSocket('ws://localhost:8765');
+          
+          debugWebSocket.onopen = function(event) {
+            console.log('[WebSocket] 连接成功');
+            updateWebSocketStatus('connected', '已连接');
+            wsReconnectAttempts = 0;
+            log('WebSocket', '调试连接已建立', 'success');
+          };
+          
+          debugWebSocket.onmessage = function(event) {
+            wsMessageCount++;
+            elements.wsMessageCount.textContent = wsMessageCount;
+            
+            const parsed = parseDebugMessage(event.data);
+            
+            if (parsed.type === 'stt') {
+              log('STT', parsed.content, 'stt');
+            } else if (parsed.type === 'llm') {
+              log('LLM', parsed.content, 'llm');
+            } else if (parsed.type === 'error') {
+              log(parsed.source, parsed.content, 'error');
+              showErrorPopup(`${parsed.source}错误`, parsed.content);
+            } else {
+              log('调试', parsed.content);
+            }
+          };
+          
+          debugWebSocket.onclose = function(event) {
+            console.log('[WebSocket] 连接关闭:', event.code, event.reason);
+            updateWebSocketStatus('disconnected', '已断开');
+            
+            // 自动重连逻辑
+            if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+              wsReconnectAttempts++;
+              log('WebSocket', `连接断开，${WS_RECONNECT_DELAY/1000}秒后尝试重连 (${wsReconnectAttempts}/${WS_MAX_RECONNECT_ATTEMPTS})`);
+              
+              wsReconnectTimer = setTimeout(() => {
+                connectWebSocket();
+              }, WS_RECONNECT_DELAY);
+            } else {
+              log('WebSocket', '重连次数已达上限，请手动刷新页面', 'error');
+            }
+          };
+          
+          debugWebSocket.onerror = function(error) {
+            console.error('[WebSocket] 连接错误:', error);
+            updateWebSocketStatus('disconnected', '连接失败');
+            log('WebSocket', '连接出现错误', 'error');
+          };
+          
+        } catch (error) {
+          console.error('[WebSocket] 创建连接失败:', error);
+          updateWebSocketStatus('disconnected', '创建失败');
+          log('WebSocket', `创建连接失败: ${error.message}`, 'error');
+        }
+      }
+
+      // 断开WebSocket连接
+      function disconnectWebSocket() {
+        if (wsReconnectTimer) {
+          clearTimeout(wsReconnectTimer);
+          wsReconnectTimer = null;
+        }
+        
+        if (debugWebSocket) {
+          debugWebSocket.close();
+          debugWebSocket = null;
+        }
+        
+        updateWebSocketStatus('disconnected', '未连接');
+        wsReconnectAttempts = 0;
       }
 
       async function fetchAgoraConfig(role = "publisher") {
@@ -536,6 +866,9 @@
           
           log("系统", "✅ RTC系统初始化成功，正在申请进入房间...");
           setConnectionState("idle", "正在申请进入房间...");
+
+          // 启动WebSocket调试连接
+          connectWebSocket();
 
           // 1) 申请进入（拿锁+拿token）
           const enterUrl = `${API_BASE_URL}/rtc/enter`;
@@ -971,6 +1304,9 @@
             subscriptionManager = null;
             console.log("[SUBSCRIPTION] 订阅管理器已清理");
           }
+
+          // 断开WebSocket连接
+          disconnectWebSocket();
          
 
           // 调用统一的清理函数（包含房间锁释放）
@@ -1011,6 +1347,10 @@
       });
 
       log("系统", "页面加载完成，点击按钮即可体验声网 RTC 链路。");
+      
+      // 页面加载时尝试连接WebSocket调试服务
+      log("系统", "正在连接WebSocket调试服务...");
+      connectWebSocket();
     </script>
   </body>
 </html>

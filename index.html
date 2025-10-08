@@ -448,6 +448,10 @@
       const WS_MAX_RECONNECT_ATTEMPTS = 5;
       const WS_RECONNECT_DELAY = 3000;
       
+      // 去重机制变量
+      let lastMessageHashes = new Map(); // 存储不同类型消息的最后hash值
+      const DEDUP_WINDOW_SIZE = 5; // 保留最近5条消息的hash用于去重
+      
       const elements = {
         connectionStatus: document.getElementById("connectionStatus"),
         statusHint: document.getElementById("statusHint"),
@@ -466,7 +470,53 @@
         wsMessageCount: document.getElementById("wsMessageCount"),
       };
 
+      // 简单的字符串hash函数
+      function simpleHash(str) {
+        let hash = 0;
+        if (str.length === 0) return hash;
+        for (let i = 0; i < str.length; i++) {
+          const char = str.charCodeAt(i);
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash; // 转换为32位整数
+        }
+        return hash.toString();
+      }
+
+      // 检查消息是否重复
+      function isDuplicateMessage(source, message, type) {
+        const messageKey = `${type}_${source}`;
+        const messageHash = simpleHash(message.trim());
+        
+        // 获取该类型消息的历史hash列表
+        if (!lastMessageHashes.has(messageKey)) {
+          lastMessageHashes.set(messageKey, []);
+        }
+        
+        const hashList = lastMessageHashes.get(messageKey);
+        
+        // 检查是否在最近的消息中出现过
+        if (hashList.includes(messageHash)) {
+          console.log(`[去重] 发现重复消息 [${type}/${source}]: "${message.substring(0, 50)}..."`);
+          return true;
+        }
+        
+        // 添加新hash到列表
+        hashList.push(messageHash);
+        
+        // 保持列表大小在限制范围内
+        if (hashList.length > DEDUP_WINDOW_SIZE) {
+          hashList.shift(); // 移除最老的hash
+        }
+        
+        return false;
+      }
+
       function log(source, message, type = "info") {
+        // 🚫 去重检查：如果是重复消息则直接跳过
+        if (isDuplicateMessage(source, message, type)) {
+          return; // 静默跳过重复消息
+        }
+        
         const entry = document.createElement("div");
         entry.className = "log-entry";
         const timestamp = new Date().toLocaleTimeString();
@@ -713,14 +763,12 @@
             wsReconnectAttempts = 0;
             log('WebSocket', '调试连接已建立', 'success');
             
-            // 发送bind消息以绑定客户端
+            // 发送bind消息以绑定客户端（扁平JSON格式）
             try {
               const bindMessage = JSON.stringify({
                 type: 'bind',
-                data: {
-                  client_id: 'web_console',
-                  client_type: 'web_client'
-                }
+                client_id: 'web_console',
+                client_type: 'web_client'
               });
               debugWebSocket.send(bindMessage);
               console.log('[WebSocket] 已发送bind消息:', bindMessage);

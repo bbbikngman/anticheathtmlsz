@@ -512,9 +512,33 @@
       }
 
       function log(source, message, type = "info") {
-        // 🚫 去重检查：如果是重复消息则直接跳过
-        if (isDuplicateMessage(source, message, type)) {
-          return; // 静默跳过重复消息
+        // 🚫 去重检查：对于LLM消息放宽去重限制，只对完全相同且时间间隔很短的消息去重
+        if (type === "llm" || source === "LLM") {
+          // 对LLM消息使用更宽松的去重策略：只在5秒内的完全相同消息才去重
+          const now = Date.now();
+          const messageKey = `${type}_${source}`;
+          const messageHash = simpleHash(message.trim());
+          
+          if (!window.lastLLMMessages) {
+            window.lastLLMMessages = new Map();
+          }
+          
+          const lastMessage = window.lastLLMMessages.get(messageKey);
+          if (lastMessage && lastMessage.hash === messageHash && (now - lastMessage.timestamp) < 5000) {
+            console.log(`[去重] LLM消息在5秒内重复，跳过: "${message.substring(0, 50)}..."`);
+            return;
+          }
+          
+          // 更新最后一条LLM消息记录
+          window.lastLLMMessages.set(messageKey, {
+            hash: messageHash,
+            timestamp: now
+          });
+        } else {
+          // 对其他类型消息使用原有的去重逻辑
+          if (isDuplicateMessage(source, message, type)) {
+            return; // 静默跳过重复消息
+          }
         }
         
         const entry = document.createElement("div");

@@ -1118,6 +1118,10 @@
           await client.join(appId, CHANNEL, token, uid);
           log("声网", `已加入频道 ${CHANNEL}`);
 
+          // 🚀 关键修复：立即绑定事件监听，避免错过 Bot 的 published 事件
+          console.log("[FLOW] 🔧 立即绑定事件监听器...");
+          bindClientEvents();
+
           // 4) 初始化订阅管理器（监听Bot用户）
           const config = await fetchAgoraConfig("publisher"); // 获取botUid
           subscriptionManager = new WebSubscriptionManager(client, {
@@ -1201,6 +1205,10 @@
           };
 
           console.log("[SUBSCRIPTION] 订阅管理器初始化完成，已设置回调函数");
+
+          // 🚀 关键修复：立即扫描并补订现有的 Bot 用户
+          console.log("[FLOW] 🔍 扫描并补订现有 Bot 用户...");
+          await scanAndSubscribeExistingBots();
 
           // [DEBUG] 检查当前远端用户
           console.log("[DEBUG] 当前远端用户:", client.remoteUsers);
@@ -1318,7 +1326,9 @@
             };
             document.body.appendChild(btn);
           };
-          // [WELCOME] 前端触发欢迎语
+
+          // 🚀 关键修复：在所有准备工作完成后再触发欢迎语
+          console.log("[FLOW] 🎉 所有准备工作完成，现在触发欢迎语...");
           try {
             const resp = await fetch(`${API_BASE_URL}/api/rtc/welcome`, {
               method: "POST",
@@ -1328,20 +1338,13 @@
             const data = await resp.json();
             console.log("[WELCOME] 触发结果:", data);
             if (data.ok && data.welcome_sent) {
-              log("系统", "欢迎语已触发");
+              log("系统", "✅ 欢迎语已触发（音频订阅已就绪）");
             } else {
               console.warn("[WELCOME] 触发失败或未发送:", data);
             }
           } catch (err) {
             console.error("[WELCOME] 请求出错:", err);
           }
-
-
-          // ?? 修复：在join之前注册事件监听，避免错过Bot的published事件
-          console.log("[DEBUG] 在join前注册所有事件监听");
-
-          // 成功 join 并完成其他准备后
-          bindClientEvents();
 
           // --- 新增：加入后主动检查Bot用户并可能启动重试 ---
           if (subscriptionManager) {
@@ -1422,30 +1425,119 @@
         // 先防御性解绑（避免极端情况下重复绑定）
         unbindClientEvents();
 
+        // 🚀 关键修复：立即订阅 Bot 音频，避免延迟
+        clientHandlers.userPublished = async (user, mediaType) => {
+          console.log("[EVENT] user-published:", user.uid, mediaType);
+          
+          // 如果是 Bot 用户发布音频，立即订阅
+          if (mediaType === "audio" && WebUIDValidator.isBotUser(user.uid)) {
+            try {
+              console.log(`[AUTO] 🤖 检测到 Bot ${user.uid} 发布音频，立即订阅...`);
+              await client.subscribe(user, "audio");
+              
+              remoteAudioTrack = user.audioTrack;
+              if (remoteAudioTrack) {
+                // 设置音量
+                const volume = parseInt(elements.volumeSlider.value) || 70;
+                remoteAudioTrack.setVolume(volume);
+                
+                // 开始播放
+                remoteAudioTrack.play("remoteAudio");
+                console.log(`[AUTO] ✅ Bot ${user.uid} 音频已订阅并开始播放`);
+                log("自动订阅", `Bot ${user.uid} 音频已连接并播放`);
+                
+                // 更新UI状态
+                elements.remoteUid.textContent = `Bot(${user.uid}) - 已连接`;
+              } else {
+                console.error(`[AUTO] ❌ 订阅成功但未获取到 audioTrack`);
+              }
+            } catch (err) {
+              console.error(`[AUTO] ❌ 立即订阅 Bot ${user.uid} 音频失败:`, err);
+              log("订阅失败", `Bot ${user.uid} 音频订阅失败: ${err.message}`, "error");
+            }
+          }
+        };
+
         clientHandlers.userUnpublished = (user, mediaType) => {
           console.log("[EVENT] user-unpublished:", user.uid, mediaType);
-          elements.remoteUid.textContent = "-";
-          log("取消发布", `UID ${user.uid} 取消发布音频`);
+          if (WebUIDValidator.isBotUser(user.uid) && mediaType === "audio") {
+            elements.remoteUid.textContent = "-";
+            log("取消发布", `Bot ${user.uid} 取消发布音频`);
+          }
         };
 
         clientHandlers.userLeft = (user) => {
           console.log("[EVENT] user-left:", user.uid);
-          elements.remoteUid.textContent = "-";
-          log("离开", `UID ${user.uid} 已离开`);
+          if (WebUIDValidator.isBotUser(user.uid)) {
+            elements.remoteUid.textContent = "-";
+            log("离开", `Bot ${user.uid} 已离开`);
+          }
         };
 
         clientHandlers.connectionStateChange = (cur, prev, reason) => {
           log("声网", `连接状态: ${prev} -> ${cur} (${reason})`);
         };
 
+        // 绑定所有事件
+        client.on("user-published", clientHandlers.userPublished);
         client.on("user-unpublished", clientHandlers.userUnpublished);
         client.on("user-left", clientHandlers.userLeft);
         client.on("connection-state-change", clientHandlers.connectionStateChange);
       }
 
+      // 🚀 关键修复：扫描并补订现有的 Bot 用户
+      async function scanAndSubscribeExistingBots() {
+        console.log("[SCAN] 开始扫描现有远端用户...");
+        const remoteUsers = client.remoteUsers;
+        console.log(`[SCAN] 发现 ${remoteUsers.length} 个远端用户`);
+        
+        for (const user of remoteUsers) {
+          console.log(`[SCAN] 检查用户 ${user.uid}:`, {
+            hasAudio: user.hasAudio,
+            audioTrack: !!user.audioTrack,
+            isBotUser: WebUIDValidator.isBotUser(user.uid)
+          });
+          
+          if (WebUIDValidator.isBotUser(user.uid) && (user.hasAudio || user.audioTrack)) {
+            try {
+              console.log(`[SCAN] 🤖 发现现有 Bot ${user.uid}，立即补订音频...`);
+              
+              // 如果还没有订阅，则订阅
+              if (!user.audioTrack) {
+                await client.subscribe(user, "audio");
+                console.log(`[SCAN] ✅ 补订 Bot ${user.uid} 音频成功`);
+              }
+              
+              remoteAudioTrack = user.audioTrack;
+              if (remoteAudioTrack) {
+                // 设置音量
+                const volume = parseInt(elements.volumeSlider.value) || 70;
+                remoteAudioTrack.setVolume(volume);
+                
+                // 开始播放
+                remoteAudioTrack.play("remoteAudio");
+                console.log(`[SCAN] ✅ Bot ${user.uid} 音频已开始播放`);
+                log("补订成功", `发现并连接了 Bot ${user.uid} 音频`);
+                
+                // 更新UI状态
+                elements.remoteUid.textContent = `Bot(${user.uid}) - 已连接`;
+                break; // 找到一个Bot就够了
+              }
+            } catch (err) {
+              console.error(`[SCAN] ❌ 补订 Bot ${user.uid} 音频失败:`, err);
+              log("补订失败", `Bot ${user.uid} 音频补订失败: ${err.message}`, "error");
+            }
+          }
+        }
+        
+        if (remoteUsers.length === 0) {
+          console.log("[SCAN] 当前频道内无远端用户，等待 Bot 加入...");
+        }
+      }
+
       function unbindClientEvents() {
-        if (clientHandlers.connectionStateChange) {
-          client.off("connection-state-change", clientHandlers.connectionStateChange);
+        if (clientHandlers.userPublished) {
+          client.off("user-published", clientHandlers.userPublished);
         }
         if (clientHandlers.userUnpublished) {
           client.off("user-unpublished", clientHandlers.userUnpublished);
@@ -1453,8 +1545,12 @@
         if (clientHandlers.userLeft) {
           client.off("user-left", clientHandlers.userLeft);
         }
+        if (clientHandlers.connectionStateChange) {
+          client.off("connection-state-change", clientHandlers.connectionStateChange);
+        }
         // 可选：重置为 null，避免误用旧指针
         clientHandlers = {
+          userPublished: null,
           userUnpublished: null,
           userLeft: null,
           connectionStateChange: null,

@@ -448,9 +448,9 @@
       const WS_MAX_RECONNECT_ATTEMPTS = 5;
       const WS_RECONNECT_DELAY = 3000;
       
-      // 去重机制变量
-      let lastMessageHashes = new Map(); // 存储不同类型消息的最后hash值
-      const DEDUP_WINDOW_SIZE = 5; // 保留最近5条消息的hash用于去重
+      // === 统一去重：2s TTL ===
+      const DEDUP_TTL_MS = 2000;           // ★ 2 秒 TTL
+      const lastSeenMap = new Map();       // hash -> ts
       
       const elements = {
         connectionStatus: document.getElementById("connectionStatus"),
@@ -482,64 +482,35 @@
         return hash.toString();
       }
 
-      // 检查消息是否重复
-      function isDuplicateMessage(source, message, type) {
-        const messageKey = `${type}_${source}`;
-        const messageHash = simpleHash(message.trim());
-        
-        // 获取该类型消息的历史hash列表
-        if (!lastMessageHashes.has(messageKey)) {
-          lastMessageHashes.set(messageKey, []);
-        }
-        
-        const hashList = lastMessageHashes.get(messageKey);
-        
-        // 检查是否在最近的消息中出现过
-        if (hashList.includes(messageHash)) {
-          console.log(`[去重] 发现重复消息 [${type}/${source}]: "${message.substring(0, 50)}..."`);
+      function normalizeForHash(s) {
+        return (s || '').replace(/\s+/g, ' ').trim(); // 合并空白，避免无意义差异
+      }
+
+      function shouldDedup(source, message, type) {
+        const keyType = (type || source || 'info').toString().toLowerCase();
+        const hash = simpleHash(`${keyType}|${normalizeForHash(message)}`);
+        const now = Date.now();
+        const prev = lastSeenMap.get(hash) || 0;
+
+        if (now - prev < DEDUP_TTL_MS) {
+          console.log(`[去重] ${keyType} 在 ${now - prev}ms 内重复，跳过: "${(message || '').slice(0,50)}..."`);
           return true;
         }
-        
-        // 添加新hash到列表
-        hashList.push(messageHash);
-        
-        // 保持列表大小在限制范围内
-        if (hashList.length > DEDUP_WINDOW_SIZE) {
-          hashList.shift(); // 移除最老的hash
-        }
-        
+        lastSeenMap.set(hash, now);
         return false;
       }
 
-      function log(source, message, type = "info") {
-        // 🚫 去重检查：对于LLM消息放宽去重限制，只对完全相同且时间间隔很短的消息去重
-        if (type === "llm" || source === "LLM") {
-          // 对LLM消息使用更宽松的去重策略：只在5秒内的完全相同消息才去重
-          const now = Date.now();
-          const messageKey = `${type}_${source}`;
-          const messageHash = simpleHash(message.trim());
-          
-          if (!window.lastLLMMessages) {
-            window.lastLLMMessages = new Map();
-          }
-          
-          const lastMessage = window.lastLLMMessages.get(messageKey);
-          if (lastMessage && lastMessage.hash === messageHash && (now - lastMessage.timestamp) < 5000) {
-            console.log(`[去重] LLM消息在5秒内重复，跳过: "${message.substring(0, 50)}..."`);
-            return;
-          }
-          
-          // 更新最后一条LLM消息记录
-          window.lastLLMMessages.set(messageKey, {
-            hash: messageHash,
-            timestamp: now
-          });
-        } else {
-          // 对其他类型消息使用原有的去重逻辑
-          if (isDuplicateMessage(source, message, type)) {
-            return; // 静默跳过重复消息
-          }
+      // 定期清理过期的hash记录，防止Map膨胀
+      setInterval(() => {
+        const now = Date.now();
+        for (const [k, ts] of lastSeenMap.entries()) {
+          if (now - ts > 60000) lastSeenMap.delete(k);
         }
+      }, 30000);
+
+      function log(source, message, type = "info") {
+        // 统一 2 秒 TTL 去重
+        if (shouldDedup(source, message, type)) return;
         
         const entry = document.createElement("div");
         entry.className = "log-entry";
@@ -637,26 +608,11 @@
           // 检查是否是新的assistant_text消息格式（优先处理）
           if (jsonMessage.type === 'assistant_text' && jsonMessage.data && jsonMessage.data.text) {
             const text = jsonMessage.data.text.trim();
-            const kind = jsonMessage.data.kind || 'llm'; // 默认作为LLM消息处理
-            console.log('[WebSocket] 解析assistant_text消息:', text, '类型:', kind);
-            
-            // 根据kind类型返回相应的消息类型
-            if (kind === 'welcome' || kind === 'llm') {
-              return {
-                type: 'llm',
-                content: text
-              };
-            } else if (kind === 'stt') {
-              return {
-                type: 'stt',
-                content: text
-              };
-            } else {
-              return {
-                type: 'llm', // 未知类型也作为LLM消息处理
-                content: text
-              };
-            }
+            const kind = jsonMessage.data.kind || 'llm';
+            return {
+              type: (kind === 'stt') ? 'stt' : 'llm',
+              content: text
+            };
           }
           
           // 检查是否是旧的调试消息格式

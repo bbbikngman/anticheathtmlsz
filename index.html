@@ -433,7 +433,8 @@
       let remoteAudioTrack = null;
       let agoraConfigCache = null;
       const backendBaseUrl = "https://cityuantifraud.cn";
-      const API_BASE_URL = "https://cityuantifraud.cn"; // 后端API基础URL
+      // 生产环境配置：使用相对路径，兼容GitHub Pages部署
+      const API_BASE_URL = window.location.origin;
       let isConnecting = false;
       let subscriptionManager = null;
       let audioContext = null;
@@ -607,13 +608,15 @@
       // 🔧 尝试备用URL的函数
       function tryAlternativeUrls(originalPath, audioData, urlIndex) {
         const alternativeUrls = [
-          `${API_BASE_URL}/${originalPath}`,
-          `${API_BASE_URL}/prerecorded_audio/audio_files/${originalPath}`,
-          `${API_BASE_URL}/htmlsz/${originalPath}`,
-          `${API_BASE_URL}/htmlsz/prerecorded_audio/audio_files/${originalPath.split('/').pop()}`,
+          // 优先使用相对路径
+          `prerecorded_audio/audio_files/${originalPath.split('/').pop()}`,
           `./prerecorded_audio/audio_files/${originalPath.split('/').pop()}`,
+          `prerecorded_audio/audio_files/${originalPath}`,
           `./prerecorded_audio/audio_files/${originalPath}`,
-          `prerecorded_audio/audio_files/${originalPath.split('/').pop()}`
+          originalPath.startsWith('prerecorded_audio/') ? originalPath : `prerecorded_audio/audio_files/${originalPath}`,
+          // 备用绝对路径（如果相对路径都失败）
+          `${API_BASE_URL}/${originalPath}`,
+          `${API_BASE_URL}/prerecorded_audio/audio_files/${originalPath.split('/').pop()}`
         ];
         
         if (urlIndex >= alternativeUrls.length) {
@@ -734,10 +737,10 @@
           console.log('  - audioFilePath 类型:', typeof audioFilePath);
           console.log('  - audioData:', JSON.stringify(audioData, null, 2));
           
-          // 构建音频文件的完整URL
-          // audioFilePath 现在已经包含完整的相对路径 (prerecorded_audio/audio_files/hash.mp3)
-          const audioUrl = `${API_BASE_URL}/${audioFilePath}`;
-          console.log('[预录制音频] 🎵 构建的音频URL:', audioUrl);
+          // 构建音频文件的相对路径URL
+          // 直接使用相对路径，不需要API_BASE_URL
+          const audioUrl = audioFilePath.startsWith('prerecorded_audio/') ? audioFilePath : `prerecorded_audio/audio_files/${audioFilePath}`;
+          console.log('[预录制音频] 🎵 构建的音频URL (相对路径):', audioUrl);
           
           // 🔍 分析路径结构
           const pathParts = audioFilePath.split('/');
@@ -1021,6 +1024,12 @@
             try {
               const parsed = parseDebugMessage(event.data);
               console.log('[WebSocket] 解析后的消息:', parsed);
+              
+              // 检查parsed是否为null（预录制音频消息会返回null）
+              if (parsed === null) {
+                console.log('[WebSocket] 预录制音频消息已处理，跳过后续处理');
+                return;
+              }
               
               if (parsed.type === 'ping') {
                 // 响应ping消息，发送pong

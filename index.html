@@ -606,7 +606,8 @@
           log('系统', `播放预录制音频: ${audioData.text || '未知文本'}`, 'success');
           
           // 构建音频文件的完整URL
-          const audioUrl = `${API_BASE_URL}/prerecorded_audio/audio_files/${audioFilePath}`;
+          // audioFilePath 现在已经包含完整的相对路径 (prerecorded_audio/audio_files/hash.mp3)
+          const audioUrl = `${API_BASE_URL}/${audioFilePath}`;
           console.log('[预录制音频] 音频URL:', audioUrl);
           
           // 创建音频元素
@@ -1200,10 +1201,6 @@
               }
             }
           };
-
-
-
-
 
 
 

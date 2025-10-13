@@ -195,8 +195,8 @@ class WebSubscriptionManager {
       });
     }
 
-    // 如果启用自动订阅，尝试订阅新发布的媒体
-    if (this.options.enableAutoSubscribe) {
+    // 如果启用自动订阅，只订阅音频流，避免视频订阅
+    if (this.options.enableAutoSubscribe && mediaType === "audio") {
       await this.subscribeToUser(user.uid, mediaType);
     }
 
@@ -372,15 +372,17 @@ class WebSubscriptionManager {
   async _attemptAutoSubscription(user) {
     const subscriptionTypes = [];
 
+    // 只订阅音频流，避免视频订阅
     if (user.hasAudio) {
       subscriptionTypes.push("audio");
     }
-    if (user.hasVideo) {
-      subscriptionTypes.push("video");
-    }
+    // 注释掉视频订阅以避免摄像头权限请求
+    // if (user.hasVideo) {
+    //   subscriptionTypes.push("video");
+    // }
 
     if (subscriptionTypes.length > 0) {
-      this._log("info", `自动订阅用户 ${user.uid}`, {
+      this._log("info", `自动订阅用户 ${user.uid} (仅音频)`, {
         types: subscriptionTypes,
       });
 

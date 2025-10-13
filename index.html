@@ -650,6 +650,77 @@
         }, 3000);
       }
 
+      // 🔍 从缓存索引中查找并播放预录制音频
+      async function tryFindAndPlayPrerecordedAudio(text, messageData) {
+        try {
+          console.log('[预录制音频] 🔍 开始查找音频文件:', text);
+          
+          // 🔍 尝试加载缓存索引
+          const cacheIndexUrl = './prerecorded_audio/cache_index.json';
+          console.log('[预录制音频] 🔍 加载缓存索引:', cacheIndexUrl);
+          
+          const response = await fetch(cacheIndexUrl);
+          if (!response.ok) {
+            console.error('[预录制音频] ❌ 无法加载缓存索引:', response.status, response.statusText);
+            return;
+          }
+          
+          const cacheIndex = await response.json();
+          console.log('[预录制音频] 🔍 缓存索引加载成功，条目数:', Object.keys(cacheIndex).length);
+          
+          // 🔍 查找匹配的音频文件
+          let foundEntry = null;
+          let foundHash = null;
+          
+          // 方法1: 直接文本匹配
+          for (const [hash, entry] of Object.entries(cacheIndex)) {
+            if (entry.text === text || entry.normalized_text === text) {
+              foundEntry = entry;
+              foundHash = hash;
+              console.log('[预录制音频] ✅ 找到匹配文本的音频文件 (精确匹配):', hash, entry.audio_file);
+              break;
+            }
+          }
+          
+          // 方法2: 如果精确匹配失败，尝试模糊匹配
+          if (!foundEntry) {
+            const normalizedText = text.replace(/[，。！？；：""''（）【】]/g, '').replace(/\s+/g, '');
+            for (const [hash, entry] of Object.entries(cacheIndex)) {
+              const entryNormalized = (entry.normalized_text || entry.text || '').replace(/[，。！？；：""''（）【】]/g, '').replace(/\s+/g, '');
+              if (entryNormalized === normalizedText) {
+                foundEntry = entry;
+                foundHash = hash;
+                console.log('[预录制音频] ✅ 找到匹配文本的音频文件 (模糊匹配):', hash, entry.audio_file);
+                break;
+              }
+            }
+          }
+          
+          if (foundEntry && foundEntry.audio_file) {
+            // 🎵 构建音频文件路径
+            const audioFilePath = `prerecorded_audio/audio_files/${foundEntry.audio_file}`;
+            console.log('[预录制音频] 🎵 构建音频文件路径:', audioFilePath);
+            
+            // 播放音频文件
+            playPrerecordedAudio(audioFilePath, {
+              text: text,
+              audio_file: foundEntry.audio_file,
+              hash: foundHash,
+              ...messageData
+            });
+          } else {
+            console.warn('[预录制音频] ⚠️ 未找到匹配的音频文件:', text);
+            console.log('[预录制音频] 🔍 可用的音频文件列表:');
+            Object.entries(cacheIndex).slice(0, 5).forEach(([hash, entry]) => {
+              console.log(`  - ${hash}: "${entry.text || entry.normalized_text}"`);
+            });
+          }
+          
+        } catch (error) {
+          console.error('[预录制音频] ❌ 查找音频文件失败:', error);
+        }
+      }
+
       // 播放预录制音频文件
       function playPrerecordedAudio(audioFilePath, audioData) {
         try {
@@ -769,6 +840,23 @@
           if (jsonMessage.type === 'assistant_text' && jsonMessage.data && jsonMessage.data.text) {
             const text = jsonMessage.data.text.trim();
             const kind = jsonMessage.data.kind || 'llm';
+            const source = jsonMessage.data.source;
+            
+            // 🔍 检查是否是预录制音频消息
+            if (source === 'prerecorded_cache') {
+              console.log('[WebSocket] 🎵 检测到预录制音频消息:', jsonMessage.data);
+              
+              // 记录预录制音频播放时间
+              lastPrerecordedAudioTime = Date.now();
+              
+              // 🔍 尝试从缓存索引中查找对应的音频文件
+              tryFindAndPlayPrerecordedAudio(text, jsonMessage.data);
+              
+              return {
+                type: (kind === 'stt') ? 'stt' : 'llm',
+                content: `${text}（触发预录制）`
+              };
+            }
             
             // 检查是否是预录制音频相关的消息（在预录制音频播放后的短时间内）
             const now = Date.now();

@@ -433,6 +433,7 @@
       let remoteAudioTrack = null;
       let agoraConfigCache = null;
       const backendBaseUrl = "https://cityuantifraud.cn";
+      const API_BASE_URL = "https://cityuantifraud.cn"; // 后端API基础URL
       let isConnecting = false;
       let subscriptionManager = null;
       let audioContext = null;
@@ -451,6 +452,10 @@
       // === 统一去重：2s TTL ===
       const DEDUP_TTL_MS = 2000;           // ★ 2 秒 TTL
       const lastSeenMap = new Map();       // hash -> ts
+      
+      // 预录制音频播放状态跟踪
+      let lastPrerecordedAudioTime = 0;
+      const PRERECORDED_AUDIO_WINDOW = 1000; // 1秒内的assistant_text消息被认为是预录制音频相关
       
       const elements = {
         connectionStatus: document.getElementById("connectionStatus"),
@@ -660,24 +665,31 @@
             const audioData = jsonMessage.data;
             console.log('[WebSocket] 收到预录制音频信号:', audioData);
             
+            // 记录预录制音频播放时间
+            lastPrerecordedAudioTime = Date.now();
+            
             // 播放预录制音频文件
             if (audioData.audio_file_path) {
               playPrerecordedAudio(audioData.audio_file_path, audioData);
             }
             
-            return {
-              type: 'llm',
-              content: audioData.text || '播放预录制音频'
-            };
+            // 不返回消息对象，避免重复显示
+            // 预录制音频的文本内容会通过 assistant_text 消息单独发送
+            return null;
           }
           
           // 检查是否是新的assistant_text消息格式（优先处理）
           if (jsonMessage.type === 'assistant_text' && jsonMessage.data && jsonMessage.data.text) {
             const text = jsonMessage.data.text.trim();
             const kind = jsonMessage.data.kind || 'llm';
+            
+            // 检查是否是预录制音频相关的消息（在预录制音频播放后的短时间内）
+            const now = Date.now();
+            const isPrerecordedRelated = (now - lastPrerecordedAudioTime) < PRERECORDED_AUDIO_WINDOW;
+            
             return {
               type: (kind === 'stt') ? 'stt' : 'llm',
-              content: text
+              content: isPrerecordedRelated ? `${text}（触发预录制）` : text
             };
           }
           
@@ -1014,7 +1026,6 @@
 
       // 竞争性单通道相关变量
       const CHANNEL = "solidchannel";
-      const API_BASE_URL = "https://cityuantifraud.cn"; // 后端API基础URL
       let sessionId, token, uid, appId;
       let beatTimer;
       let remoteCheckTimer = null; // ✅ 新增：远端用户定时检查计时器（全局）

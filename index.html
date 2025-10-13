@@ -599,11 +599,76 @@
         }, 5000);
       }
 
+      // 播放预录制音频文件
+      function playPrerecordedAudio(audioFilePath, audioData) {
+        try {
+          console.log('[预录制音频] 开始播放:', audioFilePath, audioData);
+          log('系统', `播放预录制音频: ${audioData.text || '未知文本'}`, 'success');
+          
+          // 构建音频文件的完整URL
+          const audioUrl = `${API_BASE_URL}/prerecorded_audio/audio_files/${audioFilePath}`;
+          console.log('[预录制音频] 音频URL:', audioUrl);
+          
+          // 创建音频元素
+          const audioElement = new Audio(audioUrl);
+          
+          // 设置音频事件监听器
+          audioElement.onloadstart = () => {
+            console.log('[预录制音频] 开始加载音频文件');
+          };
+          
+          audioElement.oncanplay = () => {
+            console.log('[预录制音频] 音频文件可以播放');
+          };
+          
+          audioElement.onplay = () => {
+            console.log('[预录制音频] 音频开始播放');
+            log('系统', '预录制音频开始播放', 'success');
+          };
+          
+          audioElement.onended = () => {
+            console.log('[预录制音频] 音频播放完成');
+            log('系统', '预录制音频播放完成', 'success');
+          };
+          
+          audioElement.onerror = (error) => {
+            console.error('[预录制音频] 播放失败:', error);
+            log('系统', `预录制音频播放失败: ${error.message || '未知错误'}`, 'error');
+          };
+          
+          // 开始播放
+          audioElement.play().catch(error => {
+            console.error('[预录制音频] 播放启动失败:', error);
+            log('系统', `预录制音频播放启动失败: ${error.message}`, 'error');
+          });
+          
+        } catch (error) {
+          console.error('[预录制音频] 播放函数执行失败:', error);
+          log('系统', `预录制音频播放函数执行失败: ${error.message}`, 'error');
+        }
+      }
+
       // 解析WebSocket调试消息
       function parseDebugMessage(message) {
         try {
           // 尝试解析JSON格式的消息
           const jsonMessage = JSON.parse(message);
+          
+          // 检查是否是预录制音频信号
+          if (jsonMessage.type === 'prerecorded_audio' && jsonMessage.data) {
+            const audioData = jsonMessage.data;
+            console.log('[WebSocket] 收到预录制音频信号:', audioData);
+            
+            // 播放预录制音频文件
+            if (audioData.audio_file_path) {
+              playPrerecordedAudio(audioData.audio_file_path, audioData);
+            }
+            
+            return {
+              type: 'llm',
+              content: audioData.text || '播放预录制音频'
+            };
+          }
           
           // 检查是否是新的assistant_text消息格式（优先处理）
           if (jsonMessage.type === 'assistant_text' && jsonMessage.data && jsonMessage.data.text) {

@@ -1,0 +1,412 @@
+{
+  "6a3a36efa23bbf901c36ef300b1f52de": {
+    "text": "我们检测到一个小时前您接听了一个0079开头，尾号4587的境外电话，请问您认识这个号码吗？",
+    "normalized_text": "我们检测到一个小时前您接听了一个0079开头,尾号4587的境外电话,请问您认识这个号码吗?",
+    "audio_file": "6a3a36efa23bbf901c36ef300b1f52de.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "7bef1aec4c05f1d15c10545188ca529d": {
+    "text": "好的，您的情况我们了解了。陌生来电一定不要轻易相信，如遇到电信网络诈骗方面的问题，可以拨打96110咨询，感谢您的配合，再见。",
+    "normalized_text": "好的,您的情况我们了解了.陌生来电一定不要轻易相信,如遇到电信网络诈骗方面的问题,可以拨打96110咨询,感谢您的配合,再见.",
+    "audio_file": "7bef1aec4c05f1d15c10545188ca529d.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "d3b3e8d423d01c79bf56213bc7398ff7": {
+    "text": "既然您不认识这个号码，您觉得这是否有可能是一通诈骗电话呢？",
+    "normalized_text": "既然您不认识这个号码,您觉得这是否有可能是一通诈骗电话呢?",
+    "audio_file": "d3b3e8d423d01c79bf56213bc7398ff7.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "4b12ec30ea7a226e0edafd4bee620d63": {
+    "text": "我们检测到一个小时前您接听了一个0079开头，尾号4587的境外电话，请问您认识这个号码吗？您可以回答我认识或我不认识。",
+    "normalized_text": "我们检测到一个小时前您接听了一个0079开头,尾号4587的境外电话,请问您认识这个号码吗?您可以回答我认识或我不认识.",
+    "audio_file": "4b12ec30ea7a226e0edafd4bee620d63.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "1ff46c848a30299758437795f25740c7": {
+    "text": "我是中国联通反诈专线的官方客服，这边检测到一个小时前您接听了一个0079开头，尾号4587的境外电话，所以打电话给您了解情况。请问您认识这个号码吗？您可以回答认识或不认识。",
+    "normalized_text": "我是中国联通反诈专线的官方客服,这边检测到一个小时前您接听了一个0079开头,尾号4587的境外电话,所以打电话给您了解情况.请问您认识这个号码吗?您可以回答认识或不认识.",
+    "audio_file": "1ff46c848a30299758437795f25740c7.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "03066221eb90d2fd0647d651728e81c2": {
+    "text": "请问您还记得对方自称是做什么的吗？有让您通过什么途径转账，或者下载 APP 吗？",
+    "normalized_text": "请问您还记得对方自称是做什么的吗?有让您通过什么途径转账,或者下载 APP 吗?",
+    "audio_file": "03066221eb90d2fd0647d651728e81c2.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "4b068e7fa0aeaa7e7d34acb1aba30f76": {
+    "text": "好的，您的情况我们了解了。陌生来电一定不要轻易相信，如遇到电信网络诈骗方面的问题，可以拨打 96110 咨询，感谢您的配合，再见。",
+    "normalized_text": "好的,您的情况我们了解了.陌生来电一定不要轻易相信,如遇到电信网络诈骗方面的问题,可以拨打 96110 咨询,感谢您的配合,再见.",
+    "audio_file": "4b068e7fa0aeaa7e7d34acb1aba30f76.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "fbc85fe9c817ba7ab57577bf8d9c15e5": {
+    "text": "请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是或不清楚。",
+    "normalized_text": "请您回想一下这个陌生号码的来电,您是否认为这可能是一通诈骗电话呢?您可以回答是或不是或不清楚.",
+    "audio_file": "fbc85fe9c817ba7ab57577bf8d9c15e5.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "1a2d80558be717072e273c0d9003e914": {
+    "text": "我是中国联通反诈专线的官方客服，这边检测到您有一通境外来电，所以打电话给您了解情况。请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是或不清楚。",
+    "normalized_text": "我是中国联通反诈专线的官方客服,这边检测到您有一通境外来电,所以打电话给您了解情况.请您回想一下这个陌生号码的来电,您是否认为这可能是一通诈骗电话呢?您可以回答是或不是或不清楚.",
+    "audio_file": "1a2d80558be717072e273c0d9003e914.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "0607fd4539fbe28e83c195de93aa94b9": {
+    "text": "如果您已经点击了陌生链接或下载 app，请您不要轻信链接内容或使用 app。这很可能是诈骗。",
+    "normalized_text": "如果您已经点击了陌生链接或下载 app,请您不要轻信链接内容或使用 app.这很可能是诈骗.",
+    "audio_file": "0607fd4539fbe28e83c195de93aa94b9.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "ad5be0c5b47a5c5d3db7a44cdfb79530": {
+    "text": "好的，您的情况我们了解了，请一定不要点开陌生网站或软件，如遇到电信网络诈骗方面的问题，可以拨打 96110 咨询，感谢您的配合，再见。",
+    "normalized_text": "好的,您的情况我们了解了,请一定不要点开陌生网站或软件,如遇到电信网络诈骗方面的问题,可以拨打 96110 咨询,感谢您的配合,再见.",
+    "audio_file": "ad5be0c5b47a5c5d3db7a44cdfb79530.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "80f2d21eb2e90aae937ce50c07d79796": {
+    "text": "请问您还记得对方是否让您通过什么途径转账，或者登录什么网站下载软件吗？您可以告诉我您的具体操作或者没有操作。",
+    "normalized_text": "请问您还记得对方是否让您通过什么途径转账,或者登录什么网站下载软件吗?您可以告诉我您的具体操作或者没有操作.",
+    "audio_file": "80f2d21eb2e90aae937ce50c07d79796.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "4005d03abbd6be80525c600d8dba03d6": {
+    "text": "我是中国联通反诈专线的官方客服，这边检测到您有一通境外来电，所以打电话给您了解情况。请问您还记得对方是否让您通过什么途径转账，或者登录什么网站下载软件吗？您可以回答您的具体操作或者没有操作。",
+    "normalized_text": "我是中国联通反诈专线的官方客服,这边检测到您有一通境外来电,所以打电话给您了解情况.请问您还记得对方是否让您通过什么途径转账,或者登录什么网站下载软件吗?您可以回答您的具体操作或者没有操作.",
+    "audio_file": "4005d03abbd6be80525c600d8dba03d6.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "8658cafe6035ed60d396e52a2f75ef3e": {
+    "text": "祝您生活愉快，再见",
+    "normalized_text": "祝您生活愉快,再见",
+    "audio_file": "8658cafe6035ed60d396e52a2f75ef3e.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "8a796d50904bddd5d54e55ddf6e64b51": {
+    "text": "请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是，或不清楚。",
+    "normalized_text": "请您回想一下这个陌生号码的来电,您是否认为这可能是一通诈骗电话呢?您可以回答是或不是,或不清楚.",
+    "audio_file": "请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是，或不清楚。.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "6bfdf980f28b890480dbf31201b7fc7e": {
+    "text": "我是中国联通反诈专线的官方客服，这边检测到您有一通境外来电，所以打电话给您了解情况。请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是，或不清楚。",
+    "normalized_text": "我是中国联通反诈专线的官方客服,这边检测到您有一通境外来电,所以打电话给您了解情况.请您回想一下这个陌生号码的来电,您是否认为这可能是一通诈骗电话呢?您可以回答是或不是,或不清楚.",
+    "audio_file": "我是中国联通反诈专线的官方客服，这边检测到您有一通境外来电，所以打电话给您了解情况。请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是，或不清楚。.mp3",
+    "created_at": null,
+    "file_size": 0,
+    "duration": 0,
+    "is_predefined": true
+  },
+  "54d4a5d9792bd772d6e80ffcf9c496d9": {
+    "text": "抱歉我没能听明白，我们检测到一个小时前您接听了一个0079开头，尾号4587的境外电话，请问您认识这个号码吗？",
+    "normalized_text": "抱歉我没能听明白,我们检测到一个小时前您接听了一个0079开头,尾号4587的境外电话,请问您认识这个号码吗?",
+    "audio_file": "抱歉我没能听明白，我们检测到一个小时前您接听了一个0079开头，尾号4587的境外电话，请问您认识这个号码吗？.mp3",
+    "created_at": 1760325808.1247468,
+    "file_size": 61344,
+    "duration": 0.639,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325808.1239743,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "9b1af74a186a849d78dc0308d1c347e8": {
+    "text": "抱歉我没能听明白，好的，您的情况我们了解了。陌生来电一定不要轻易相信，如遇到电信网络诈骗方面的问题，可以拨打96110咨询，感谢您的配合，再见。",
+    "normalized_text": "抱歉我没能听明白,好的,您的情况我们了解了.陌生来电一定不要轻易相信,如遇到电信网络诈骗方面的问题,可以拨打96110咨询,感谢您的配合,再见.",
+    "audio_file": "抱歉我没能听明白，好的，您的情况我们了解了。陌生来电一定不要轻易相信，如遇到电信网络诈骗方面的问题，可以拨打96110咨询，感谢您的配合，再见。.mp3",
+    "created_at": 1760325809.4541261,
+    "file_size": 81792,
+    "duration": 0.852,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325809.4536026,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "45531848e12339a3914125d7781a5362": {
+    "text": "抱歉我没能听明白，既然您不认识这个号码，您觉得这是否有可能是一通诈骗电话呢？",
+    "normalized_text": "抱歉我没能听明白,既然您不认识这个号码,您觉得这是否有可能是一通诈骗电话呢?",
+    "audio_file": "抱歉我没能听明白，既然您不认识这个号码，您觉得这是否有可能是一通诈骗电话呢？.mp3",
+    "created_at": 1760325810.2347834,
+    "file_size": 42048,
+    "duration": 0.438,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325810.2343442,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "302d5d38337599efed59f28ba0464c7f": {
+    "text": "抱歉我没能听明白，我们检测到一个小时前您接听了一个0079开头，尾号4587的境外电话，请问您认识这个号码吗？您可以回答我认识或我不认识。",
+    "normalized_text": "抱歉我没能听明白,我们检测到一个小时前您接听了一个0079开头,尾号4587的境外电话,请问您认识这个号码吗?您可以回答我认识或我不认识.",
+    "audio_file": "抱歉我没能听明白，我们检测到一个小时前您接听了一个0079开头，尾号4587的境外电话，请问您认识这个号码吗？您可以回答我认识或我不认识。.mp3",
+    "created_at": 1760325811.5769827,
+    "file_size": 79056,
+    "duration": 0.8235,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325811.5678139,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "42cf5ba6d265040c5938fb06b3d2145e": {
+    "text": "抱歉我没能听明白，我是中国联通反诈专线的官方客服，这边检测到一个小时前您接听了一个0079开头，尾号4587的境外电话，所以打电话给您了解情况。请问您认识这个号码吗？您可以回答认识或不认识。",
+    "normalized_text": "抱歉我没能听明白,我是中国联通反诈专线的官方客服,这边检测到一个小时前您接听了一个0079开头,尾号4587的境外电话,所以打电话给您了解情况.请问您认识这个号码吗?您可以回答认识或不认识.",
+    "audio_file": "抱歉我没能听明白，我是中国联通反诈专线的官方客服，这边检测到一个小时前您接听了一个0079开头，尾号4587的境外电话，所以打电话给您了解情况。请问您认识这个号码吗？您可以回答认识或不认识。.mp3",
+    "created_at": 1760325813.975502,
+    "file_size": 113184,
+    "duration": 1.179,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325813.974855,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "5c443fa69853f0e78140f15f9fd333d7": {
+    "text": "抱歉我没能听明白，请问您还记得对方自称是做什么的吗？有让您通过什么途径转账，或者下载 APP 吗？",
+    "normalized_text": "抱歉我没能听明白,请问您还记得对方自称是做什么的吗?有让您通过什么途径转账,或者下载 APP 吗?",
+    "audio_file": "抱歉我没能听明白，请问您还记得对方自称是做什么的吗？有让您通过什么途径转账，或者下载 APP 吗？.mp3",
+    "created_at": 1760325815.1603634,
+    "file_size": 56880,
+    "duration": 0.5925,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325815.15984,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "00a30b7781165566901da292b93943e9": {
+    "text": "抱歉我没能听明白，好的，您的情况我们了解了。陌生来电一定不要轻易相信，如遇到电信网络诈骗方面的问题，可以拨打 96110 咨询，感谢您的配合，再见。",
+    "normalized_text": "抱歉我没能听明白,好的,您的情况我们了解了.陌生来电一定不要轻易相信,如遇到电信网络诈骗方面的问题,可以拨打 96110 咨询,感谢您的配合,再见.",
+    "audio_file": "抱歉我没能听明白，好的，您的情况我们了解了。陌生来电一定不要轻易相信，如遇到电信网络诈骗方面的问题，可以拨打 96110 咨询，感谢您的配合，再见。.mp3",
+    "created_at": 1760325816.6187923,
+    "file_size": 81792,
+    "duration": 0.852,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325816.6183224,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "7397f4ecd06ea83e366a6ad42fe37d46": {
+    "text": "抱歉我没能听明白，请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是，或不清楚。",
+    "normalized_text": "抱歉我没能听明白,请您回想一下这个陌生号码的来电,您是否认为这可能是一通诈骗电话呢?您可以回答是或不是,或不清楚.",
+    "audio_file": "抱歉我没能听明白，请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是，或不清楚。.mp3",
+    "created_at": 1760325818.172778,
+    "file_size": 71568,
+    "duration": 0.7455,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325818.1720245,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "3c4b97c9c526ef720f2f074ded4c3acf": {
+    "text": "抱歉我没能听明白，我是中国联通反诈专线的官方客服，这边检测到您有一通境外来电，所以打电话给您了解情况。请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是，或不清楚。",
+    "normalized_text": "抱歉我没能听明白,我是中国联通反诈专线的官方客服,这边检测到您有一通境外来电,所以打电话给您了解情况.请您回想一下这个陌生号码的来电,您是否认为这可能是一通诈骗电话呢?您可以回答是或不是,或不清楚.",
+    "audio_file": "抱歉我没能听明白，我是中国联通反诈专线的官方客服，这边检测到您有一通境外来电，所以打电话给您了解情况。请您回想一下这个陌生号码的来电，您是否认为这可能是一通诈骗电话呢？您可以回答是或不是，或不清楚。.mp3",
+    "created_at": 1760325820.0182297,
+    "file_size": 117072,
+    "duration": 1.2195,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325820.0177314,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "5fcb4d392ef0ce78a316504e4efad624": {
+    "text": "抱歉我没能听明白，如果您已经点击了陌生链接或下载 app，请您不要轻信链接内容或使用 app。这很可能是诈骗。",
+    "normalized_text": "抱歉我没能听明白,如果您已经点击了陌生链接或下载 app,请您不要轻信链接内容或使用 app.这很可能是诈骗.",
+    "audio_file": "抱歉我没能听明白，如果您已经点击了陌生链接或下载 app，请您不要轻信链接内容或使用 app。这很可能是诈骗。.mp3",
+    "created_at": 1760325821.4829452,
+    "file_size": 62064,
+    "duration": 0.6465,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325821.4824612,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "75b45bdd9f5e89a1c96b8298f7236778": {
+    "text": "抱歉我没能听明白，好的，您的情况我们了解了，请一定不要点开陌生网站或软件，如遇到电信网络诈骗方面的问题，可以拨打 96110 咨询，感谢您的配合，再见。",
+    "normalized_text": "抱歉我没能听明白,好的,您的情况我们了解了,请一定不要点开陌生网站或软件,如遇到电信网络诈骗方面的问题,可以拨打 96110 咨询,感谢您的配合,再见.",
+    "audio_file": "抱歉我没能听明白，好的，您的情况我们了解了，请一定不要点开陌生网站或软件，如遇到电信网络诈骗方面的问题，可以拨打 96110 咨询，感谢您的配合，再见。.mp3",
+    "created_at": 1760325823.0558875,
+    "file_size": 79776,
+    "duration": 0.831,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325823.0551982,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "5fd9a45bd7919d13f8bc392fdd4d71aa": {
+    "text": "抱歉我没能听明白，请问您还记得对方是否让您通过什么途径转账，或者登录什么网站下载软件吗？您可以告诉我您的具体操作或者没有操作。",
+    "normalized_text": "抱歉我没能听明白,请问您还记得对方是否让您通过什么途径转账,或者登录什么网站下载软件吗?您可以告诉我您的具体操作或者没有操作.",
+    "audio_file": "抱歉我没能听明白，请问您还记得对方是否让您通过什么途径转账，或者登录什么网站下载软件吗？您可以告诉我您的具体操作或者没有操作。.mp3",
+    "created_at": 1760325824.1251836,
+    "file_size": 70704,
+    "duration": 0.7365,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325824.1244738,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "cb955329f9a8b23fb6ec566ac9ffca7e": {
+    "text": "抱歉我没能听明白，我是中国联通反诈专线的官方客服，这边检测到您有一通境外来电，所以打电话给您了解情况。请问您还记得对方是否让您通过什么途径转账，或者登录什么网站下载软件吗？您可以回答您的具体操作或者没有操作。",
+    "normalized_text": "抱歉我没能听明白,我是中国联通反诈专线的官方客服,这边检测到您有一通境外来电,所以打电话给您了解情况.请问您还记得对方是否让您通过什么途径转账,或者登录什么网站下载软件吗?您可以回答您的具体操作或者没有操作.",
+    "audio_file": "抱歉我没能听明白，我是中国联通反诈专线的官方客服，这边检测到您有一通境外来电，所以打电话给您了解情况。请问您还记得对方是否让您通过什么途径转账，或者登录什么网站下载软件吗？您可以回答您的具体操作或者没有操作。.mp3",
+    "created_at": 1760325825.7510252,
+    "file_size": 116496,
+    "duration": 1.2135,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325825.750549,
+      "text_filename": true,
+      "regenerated": true
+    }
+  },
+  "c731a3fbc0a14473b4b7413622c53b49": {
+    "text": "抱歉我没能听明白，祝您生活愉快，再见",
+    "normalized_text": "抱歉我没能听明白,祝您生活愉快,再见",
+    "audio_file": "抱歉我没能听明白，祝您生活愉快，再见.mp3",
+    "created_at": 1760325827.6378462,
+    "file_size": 26640,
+    "duration": 0.2775,
+    "is_predefined": true,
+    "metadata": {
+      "voice": "zh-CN-YunxiNeural",
+      "rate": "+0%",
+      "volume": "+0%",
+      "pitch": "+0Hz",
+      "engine": "edge_tts",
+      "generated_at": 1760325827.6372924,
+      "text_filename": true,
+      "regenerated": true
+    }
+  }
+}

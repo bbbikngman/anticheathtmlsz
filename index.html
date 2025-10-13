@@ -604,16 +604,86 @@
         }, 5000);
       }
 
+      // 🔧 尝试备用URL的函数
+      function tryAlternativeUrls(originalPath, audioData, urlIndex) {
+        const alternativeUrls = [
+          `${API_BASE_URL}/${originalPath}`,
+          `${API_BASE_URL}/prerecorded_audio/audio_files/${originalPath}`,
+          `${API_BASE_URL}/htmlsz/${originalPath}`,
+          `${API_BASE_URL}/htmlsz/prerecorded_audio/audio_files/${originalPath.split('/').pop()}`,
+          `./prerecorded_audio/audio_files/${originalPath.split('/').pop()}`,
+          `./prerecorded_audio/audio_files/${originalPath}`,
+          `prerecorded_audio/audio_files/${originalPath.split('/').pop()}`
+        ];
+        
+        if (urlIndex >= alternativeUrls.length) {
+          console.error('[预录制音频] ❌ 所有备用URL都失败了');
+          log('系统', '预录制音频: 所有URL都无法访问', 'error');
+          return;
+        }
+        
+        const testUrl = alternativeUrls[urlIndex];
+        console.log(`[预录制音频] 🔧 测试备用URL ${urlIndex + 1}/${alternativeUrls.length}:`, testUrl);
+        
+        const testAudio = new Audio(testUrl);
+        
+        testAudio.oncanplay = () => {
+          console.log(`[预录制音频] ✅ 备用URL ${urlIndex + 1} 成功:`, testUrl);
+          log('系统', `预录制音频: 使用备用URL播放`, 'success');
+          testAudio.play().catch(err => {
+            console.error(`[预录制音频] ❌ 备用URL ${urlIndex + 1} 播放失败:`, err);
+            tryAlternativeUrls(originalPath, audioData, urlIndex + 1);
+          });
+        };
+        
+        testAudio.onerror = (error) => {
+          console.error(`[预录制音频] ❌ 备用URL ${urlIndex + 1} 失败:`, testUrl, error);
+          tryAlternativeUrls(originalPath, audioData, urlIndex + 1);
+        };
+        
+        // 设置超时，避免无限等待
+        setTimeout(() => {
+          if (testAudio.readyState === 0) {
+            console.warn(`[预录制音频] ⏰ 备用URL ${urlIndex + 1} 超时:`, testUrl);
+            tryAlternativeUrls(originalPath, audioData, urlIndex + 1);
+          }
+        }, 3000);
+      }
+
       // 播放预录制音频文件
       function playPrerecordedAudio(audioFilePath, audioData) {
         try {
           console.log('[预录制音频] 开始播放:', audioFilePath, audioData);
           log('系统', `播放预录制音频: ${audioData.text || '未知文本'}`, 'success');
           
+          // 🔍 详细调试信息
+          console.log('[预录制音频] 🔍 详细调试信息:');
+          console.log('  - API_BASE_URL:', API_BASE_URL);
+          console.log('  - audioFilePath:', audioFilePath);
+          console.log('  - audioFilePath 类型:', typeof audioFilePath);
+          console.log('  - audioData:', JSON.stringify(audioData, null, 2));
+          
           // 构建音频文件的完整URL
           // audioFilePath 现在已经包含完整的相对路径 (prerecorded_audio/audio_files/hash.mp3)
           const audioUrl = `${API_BASE_URL}/${audioFilePath}`;
-          console.log('[预录制音频] 音频URL:', audioUrl);
+          console.log('[预录制音频] 🎵 构建的音频URL:', audioUrl);
+          
+          // 🔍 分析路径结构
+          const pathParts = audioFilePath.split('/');
+          console.log('[预录制音频] 🔍 路径分析:');
+          console.log('  - 路径分段:', pathParts);
+          console.log('  - 是否包含 prerecorded_audio:', audioFilePath.includes('prerecorded_audio'));
+          console.log('  - 是否包含 audio_files:', audioFilePath.includes('audio_files'));
+          console.log('  - 文件扩展名:', audioFilePath.split('.').pop());
+          
+          // 🔍 尝试构建不同的URL变体进行测试
+          const alternativeUrls = [
+            `${API_BASE_URL}/${audioFilePath}`,
+            `${API_BASE_URL}/prerecorded_audio/audio_files/${audioFilePath}`,
+            `${API_BASE_URL}/htmlsz/${audioFilePath}`,
+            `${API_BASE_URL}/htmlsz/prerecorded_audio/audio_files/${audioFilePath.split('/').pop()}`
+          ];
+          console.log('[预录制音频] 🔍 可能的URL变体:', alternativeUrls);
           
           // 创建音频元素
           const audioElement = new Audio(audioUrl);
@@ -638,14 +708,31 @@
           };
           
           audioElement.onerror = (error) => {
-            console.error('[预录制音频] 播放失败:', error);
+            console.error('[预录制音频] ❌ 播放失败:', error);
+            console.error('[预录制音频] ❌ 失败的URL:', audioUrl);
+            console.error('[预录制音频] ❌ 错误详情:', {
+              error: error,
+              target: error.target,
+              currentSrc: error.target?.currentSrc,
+              networkState: error.target?.networkState,
+              readyState: error.target?.readyState
+            });
             log('系统', `预录制音频播放失败: ${error.message || '未知错误'}`, 'error');
+            
+            // 🔧 尝试备用URL
+            console.log('[预录制音频] 🔧 尝试备用URL...');
+            tryAlternativeUrls(audioFilePath, audioData, 0);
           };
           
           // 开始播放
           audioElement.play().catch(error => {
-            console.error('[预录制音频] 播放启动失败:', error);
+            console.error('[预录制音频] ❌ 播放启动失败:', error);
+            console.error('[预录制音频] ❌ 启动失败的URL:', audioUrl);
             log('系统', `预录制音频播放启动失败: ${error.message}`, 'error');
+            
+            // 🔧 尝试备用URL
+            console.log('[预录制音频] 🔧 播放启动失败，尝试备用URL...');
+            tryAlternativeUrls(audioFilePath, audioData, 0);
           });
           
         } catch (error) {

@@ -527,7 +527,11 @@
       }
 
       function normalizeForHash(s) {
-        return (s || '').replace(/\s+/g, ' ').trim(); // 合并空白，避免无意义差异
+        // 移除"（触发预录制）"后缀，确保去重正确识别相同内容
+        return (s || '')
+          .replace(/（触发预录制）$/, '')  // 移除结尾的"（触发预录制）"
+          .replace(/\s+/g, ' ')           // 合并空白，避免无意义差异
+          .trim();
       }
 
       function shouldDedup(source, message, type) {
@@ -810,12 +814,12 @@
           
           audioElement.onplay = () => {
             console.log('[预录制音频] 音频开始播放');
-            log('系统', '预录制音频开始播放', 'success');
+            // log('系统', '预录制音频开始播放', 'success'); // 隐藏此消息
           };
           
           audioElement.onended = () => {
             console.log('[预录制音频] 音频播放完成');
-            log('系统', '预录制音频播放完成', 'success');
+            // log('系统', '预录制音频播放完成', 'success'); // 隐藏此消息
             prerecPlayingKey = null;
             prerecAudioEl = null;
           };

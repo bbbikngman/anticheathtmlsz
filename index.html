@@ -898,9 +898,8 @@
             const kind = jsonMessage.data.kind || 'llm';
             const source = jsonMessage.data.source;
             
-            // 仅标注为"触发预录制"，不实际播放
+            // 仅标注为"触发预录制"，不设置音频时间戳
             if (source === 'prerecorded_cache') {
-              lastPrerecordedAudioTime = Date.now();
               return {
                 type: (kind === 'stt') ? 'stt' : 'llm',
                 content: `${text}（触发预录制）`

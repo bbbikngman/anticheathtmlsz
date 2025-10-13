@@ -477,6 +477,25 @@
       let lastPrerecordedAudioTime = 0;
       const PRERECORDED_AUDIO_WINDOW = 1000; // 1秒内的assistant_text消息被认为是预录制音频相关
       
+      // ===== 预录音频"播放锁"/节流 =====
+      let prerecPlayingKey = null;
+      let prerecAudioEl = null;
+      const prerecRecent = new Map(); // key -> ts
+      const PREREC_TTL_MS = 4000;     // 4s 内相同Key不重复播
+      
+      function normalizeTextKey(t) {
+        return (t || "")
+          .replace(/[，。！？；：、"'""''（）【】[\]\s]/g, "")
+          .toLowerCase();
+      }
+      
+      function keyFromAudioData(audioData, fallbackText) {
+        if (audioData?.audio_file) return `file:${audioData.audio_file}`;
+        if (audioData?.hash)       return `hash:${audioData.hash}`;
+        const txt = audioData?.text || fallbackText || "";
+        return `text:${normalizeTextKey(txt)}`;
+      }
+      
       const elements = {
         connectionStatus: document.getElementById("connectionStatus"),
         statusHint: document.getElementById("statusHint"),
@@ -743,6 +762,20 @@
       // 播放预录制音频文件
       function playPrerecordedAudio(audioFilePath, audioData) {
         try {
+          const key = keyFromAudioData(audioData, audioData?.text);
+          const now = Date.now();
+          const last = prerecRecent.get(key) || 0;
+          if (now - last < PREREC_TTL_MS) {
+            console.log('[预录制音频] 🧊 节流：短时间内重复触发，同Key跳过 ->', key);
+            return;
+          }
+          // 如果当前就正在播放同一段，直接忽略
+          if (prerecPlayingKey === key && prerecAudioEl && !prerecAudioEl.ended) {
+            console.log('[预录制音频] 🔁 正在播放同一段，同Key跳过 ->', key);
+            return;
+          }
+          prerecRecent.set(key, now);
+          
           console.log('[预录制音频] 开始播放:', audioFilePath, audioData);
           log('系统', `播放预录制音频: ${audioData.text || '未知文本'}`, 'success');
           
@@ -763,6 +796,8 @@
           
           // 创建音频元素
           const audioElement = new Audio(audioUrl);
+          prerecAudioEl = audioElement;
+          prerecPlayingKey = key;
           
           // 设置音频事件监听器
           audioElement.onloadstart = () => {
@@ -781,6 +816,8 @@
           audioElement.onended = () => {
             console.log('[预录制音频] 音频播放完成');
             log('系统', '预录制音频播放完成', 'success');
+            prerecPlayingKey = null;
+            prerecAudioEl = null;
           };
           
           audioElement.onerror = (error) => {
@@ -795,6 +832,10 @@
             });
             log('系统', `预录制音频播放失败: ${error.message || '未知错误'}`, 'error');
             
+            // 播放失败也释放锁，避免卡死
+            prerecPlayingKey = null;
+            prerecAudioEl = null;
+            
             // 🔧 尝试备用URL
             console.log('[预录制音频] 🔧 尝试备用URL...');
             tryAlternativeUrls(audioFilePath, audioData, 0);
@@ -806,6 +847,9 @@
             console.error('[预录制音频] ❌ 启动失败的URL:', audioUrl);
             log('系统', `预录制音频播放启动失败: ${error.message}`, 'error');
             
+            prerecPlayingKey = null;
+            prerecAudioEl = null;
+            
             // 🔧 尝试备用URL
             console.log('[预录制音频] 🔧 播放启动失败，尝试备用URL...');
             tryAlternativeUrls(audioFilePath, audioData, 0);
@@ -814,6 +858,9 @@
         } catch (error) {
           console.error('[预录制音频] 播放函数执行失败:', error);
           log('系统', `预录制音频播放函数执行失败: ${error.message}`, 'error');
+          // 异常时也释放锁
+          prerecPlayingKey = null;
+          prerecAudioEl = null;
         }
       }
 
@@ -847,16 +894,9 @@
             const kind = jsonMessage.data.kind || 'llm';
             const source = jsonMessage.data.source;
             
-            // 🔍 检查是否是预录制音频消息
+            // 仅标注为"触发预录制"，不实际播放
             if (source === 'prerecorded_cache') {
-              console.log('[WebSocket] 🎵 检测到预录制音频消息:', jsonMessage.data);
-              
-              // 记录预录制音频播放时间
               lastPrerecordedAudioTime = Date.now();
-              
-              // 🔍 尝试从缓存索引中查找对应的音频文件
-              tryFindAndPlayPrerecordedAudio(text, jsonMessage.data);
-              
               return {
                 type: (kind === 'stt') ? 'stt' : 'llm',
                 content: `${text}（触发预录制）`

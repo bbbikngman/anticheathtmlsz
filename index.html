@@ -429,19 +429,12 @@
 
     <script>
       /**
-       * 路由原则（别乱改）：
-       * 1) 预录音频 & cache_index.json 仅从前端仓库读取（相对路径），绝不去后端取。
-       *    例：./prerecorded_audio/cache_index.json
-       *        ./prerecorded_audio/audio_files/xxx.mp3
-       * 
-       * 2) RTC/业务相关只打后端（cityuantifraud.cn）：
-       *    - POST /api/rtc/init
-       *    - POST /rtc/enter  / sendBeacon /rtc/beat  / sendBeacon /rtc/leave
-       *    - POST /api/rtc/welcome  / POST /api/rtc/shutdown
-       *    - GET  /api/agora/config?role=...
-       *    - WSS  wss://cityuantifraud.cn/ws
-       * 
-       * 3) 播放 Bot 的音频（来自 Agora）= 订阅 remoteAudioTrack.play('remoteAudio')，这既不是前端静态音频，也不是后端直链。
+       * 路由原则：
+       * 1) 预录音频 & cache_index.json 统一从后端读取：
+       *    `${PREREC_BASE}/cache_index.json`
+       *    `${PREREC_BASE}/audio_files/<file>.mp3`
+       * 2) RTC/业务相关只打后端（cityuantifraud.cn）。
+       * 3) Bot 实时音频来自 Agora 订阅的远端 track，与上述静态音频无关。
        */
 
       /************** ① 捕捉 F12 控制台日志（log/info/warn/error/debug + 全局错误） **************/
@@ -763,6 +756,7 @@
           a.playsInline = true;
           a.controls = false;
           a.style.display = 'none';
+          a.crossOrigin = 'anonymous';
           document.body.appendChild(a);
           pool.push(a);
         }
@@ -884,6 +878,9 @@
       // 生产环境配置：API调用使用后端服务器，静态资源使用相对路径
       const API_BASE_URL = backendBaseUrl;
       
+      // 新增一行（放在上面附近即可）
+      const PREREC_BASE = `${backendBaseUrl}/prerecorded_audio`;
+
       // 静态资源一律相对路径；该函数只是确保不会出现以 / 开头的根路径导致跳到站点根
       const staticPath = (p) => (p || "").replace(/^\/+/, "");
       // 音频路径归一化：处理Windows反斜杠并确保相对路径
@@ -1138,7 +1135,7 @@
           log('系统', '正在预加载音频文件...', 'info');
           
           // 加载缓存索引
-          const cacheIndexUrl = './prerecorded_audio/cache_index.json';
+          const cacheIndexUrl = `${PREREC_BASE}/cache_index.json`;
           const response = await fetch(cacheIndexUrl);
           if (!response.ok) {
             console.warn('[预加载] ⚠️ 无法加载缓存索引，跳过预加载');
@@ -1158,11 +1155,12 @@
             const batch = audioFiles.slice(i, i + maxConcurrent);
             const promises = batch.map(async (audioFile) => {
               try {
-                const audioUrl = staticPath(`prerecorded_audio/audio_files/${audioFile}`);
+                const audioUrl = `${PREREC_BASE}/audio_files/${audioFile}`;
                 
                 // 使用 AudioGate 的音频池预加载
                 // 这里我们不实际播放，只是让浏览器缓存这些文件
                 const tempAudio = new Audio(audioUrl);
+                tempAudio.crossOrigin = 'anonymous';
                 tempAudio.preload = 'auto';
                 tempAudio.volume = 0;
                 
@@ -1212,10 +1210,8 @@
         const base = normalizeAudioPath(originalPath);
         const basename = base.split(/[\/\\]/).pop();
         const alternativeUrls = [
-          normalizeAudioPath(`prerecorded_audio/audio_files/${basename}`),
-          normalizeAudioPath(`prerecorded_audio/audio_files/${base}`),
-          base.startsWith('prerecorded_audio/') ? normalizeAudioPath(base)
-            : normalizeAudioPath(`prerecorded_audio/audio_files/${base}`)
+          `${PREREC_BASE}/audio_files/${basename}`,
+          `${PREREC_BASE}/audio_files/${base}`
         ];
         
         if (!AudioGate.unlocked) {
@@ -1267,7 +1263,7 @@
           console.log('[预录制音频] 🔍 开始查找音频文件:', text);
           
           // 🔍 尝试加载缓存索引
-          const cacheIndexUrl = './prerecorded_audio/cache_index.json';
+          const cacheIndexUrl = `${PREREC_BASE}/cache_index.json`;
           console.log('[预录制音频] 🔍 加载缓存索引:', cacheIndexUrl);
           
           const response = await fetch(cacheIndexUrl);
@@ -1309,7 +1305,7 @@
           
           if (foundEntry && foundEntry.audio_file) {
             // 🎵 构建音频文件路径
-            const audioFilePath = `prerecorded_audio/audio_files/${foundEntry.audio_file}`;
+            const audioFilePath = `${PREREC_BASE}/audio_files/${foundEntry.audio_file}`;
             console.log('[预录制音频] 🎵 构建音频文件路径:', audioFilePath);
             
             // 播放音频文件
@@ -1359,12 +1355,9 @@
           console.log('  - audioFilePath 类型:', typeof audioFilePath);
           console.log('  - audioData:', JSON.stringify(audioData, null, 2));
           
-          // 构建音频文件的相对路径URL（仅前端静态资源）
-          const normalized = normalizeAudioPath(audioFilePath);
-          const audioUrl = normalized.startsWith('prerecorded_audio/')
-            ? normalized
-            : normalizeAudioPath(`prerecorded_audio/audio_files/${normalized}`);
-          console.log('[预录制音频] 🎵 构建的音频URL (前端相对路径):', audioUrl);
+          // 正确：保持后端绝对 URL
+          const audioUrl = audioFilePath;
+          console.log('[预录制音频] 🎵 使用后端绝对URL:', audioUrl);
           
           // 设置播放状态
           prerecPlayingKey = key;

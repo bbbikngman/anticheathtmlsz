@@ -431,8 +431,8 @@
       /**
        * 路由原则：
        * 1) 预录音频 & cache_index.json 统一从后端读取：
-       *    `${PREREC_BASE}/cache_index.json`
-       *    `${PREREC_BASE}/audio_files/<file>.mp3`
+       *    `${API_BASE_URL}/prerecorded_audio/cache_index.json`
+       *    `${API_BASE_URL}/prerecorded_audio/audio_files/<file>.mp3`
        * 2) RTC/业务相关只打后端（cityuantifraud.cn）。
        * 3) Bot 实时音频来自 Agora 订阅的远端 track，与上述静态音频无关。
        */
@@ -1013,6 +1013,27 @@
           .trim();
       }
 
+      // 🔧 统一的音频URL构建函数
+      function buildAudioURL(audioFilePath) {
+        if (!audioFilePath) return null;
+        
+        // 如果已经是完整的HTTP(S) URL，直接返回
+        if (/^https?:\/\//i.test(audioFilePath)) {
+          return audioFilePath;
+        }
+        
+        // 获取基础URL，优先使用API_BASE_URL，否则使用当前域名
+        const base = (typeof API_BASE_URL === 'string' ? API_BASE_URL : window.location.origin).replace(/\/+$/, '');
+        
+        // 确保路径以 / 开头
+        let path = audioFilePath;
+        if (!path.startsWith('/')) {
+          path = '/' + path;
+        }
+        
+        return base + path;
+      }
+
       function shouldDedup(source, message, type) {
         const keyType = (type || source || 'info').toString().toLowerCase();
         const hash = simpleHash(`${keyType}|${normalizeForHash(message)}`);
@@ -1155,8 +1176,9 @@
             const batch = audioFiles.slice(i, i + maxConcurrent);
             const promises = batch.map(async (audioFile) => {
               try {
-                // 1) 对中文/空格安全编码
-                const audioUrl = encodeURI(`${PREREC_BASE}/audio_files/${audioFile}`);
+                // 1) 使用统一的URL构建函数，确保生成正确的绝对URL
+                const audioPath = `prerecorded_audio/audio_files/${audioFile}`;
+                const audioUrl = encodeURI(buildAudioURL(audioPath));
                 
                 // 使用 AudioGate 的音频池预加载
                 // 这里我们不实际播放，只是让浏览器缓存这些文件
@@ -1224,8 +1246,8 @@
         const base = normalizeAudioPath(originalPath);
         const basename = base.split(/[\/\\]/).pop();
         const alternativeUrls = [
-          `${PREREC_BASE}/audio_files/${basename}`,
-          `${PREREC_BASE}/audio_files/${base}`
+          buildAudioURL(`prerecorded_audio/audio_files/${basename}`),
+          buildAudioURL(`prerecorded_audio/audio_files/${base}`)
         ];
         
         if (!AudioGate.unlocked) {
@@ -1319,7 +1341,7 @@
           
           if (foundEntry && foundEntry.audio_file) {
             // 🎵 构建音频文件路径
-            const audioFilePath = `${PREREC_BASE}/audio_files/${foundEntry.audio_file}`;
+            const audioFilePath = `prerecorded_audio/audio_files/${foundEntry.audio_file}`;
             console.log('[预录制音频] 🎵 构建音频文件路径:', audioFilePath);
             
             // 播放音频文件
@@ -1369,9 +1391,10 @@
           console.log('  - audioFilePath 类型:', typeof audioFilePath);
           console.log('  - audioData:', JSON.stringify(audioData, null, 2));
           
-          // 正确：保持后端绝对 URL
-          const audioUrl = audioFilePath;
-          console.log('[预录制音频] 🎵 使用后端绝对URL:', audioUrl);
+          // 使用统一的URL构建函数，确保生成正确的绝对URL
+          const audioUrl = buildAudioURL(audioFilePath);
+          console.log('[预录制音频] 🎵 构建的完整URL:', audioUrl);
+          console.log('[预录制音频] 🔍 原始路径:', audioFilePath);
           
           // 设置播放状态
           prerecPlayingKey = key;

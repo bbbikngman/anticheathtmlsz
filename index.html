@@ -1155,7 +1155,8 @@
             const batch = audioFiles.slice(i, i + maxConcurrent);
             const promises = batch.map(async (audioFile) => {
               try {
-                const audioUrl = `${PREREC_BASE}/audio_files/${audioFile}`;
+                // 1) 对中文/空格安全编码
+                const audioUrl = encodeURI(`${PREREC_BASE}/audio_files/${audioFile}`);
                 
                 // 使用 AudioGate 的音频池预加载
                 // 这里我们不实际播放，只是让浏览器缓存这些文件
@@ -1164,24 +1165,37 @@
                 tempAudio.preload = 'auto';
                 tempAudio.volume = 0;
                 
-                return new Promise((resolve, reject) => {
-                  tempAudio.oncanplaythrough = () => {
-                    console.log(`[预加载] ✅ ${audioFile} 预加载成功`);
+                return new Promise((resolve) => {
+                  // 2) 成功标准放宽：loadedmetadata / canplay / canplaythrough 任一触发即算成功
+                  const onSuccess = (evt) => {
+                    clearTimeout(t);
+                    tempAudio.onloadedmetadata = null;
+                    tempAudio.oncanplay = null;
+                    tempAudio.oncanplaythrough = null;
+                    tempAudio.onerror = null;
+                    console.log(`[预加载] ✅ ${audioFile} 预加载成功（${evt?.type}）`);
                     loadedCount++;
                     resolve();
                   };
-                  tempAudio.onerror = () => {
+                  const onError = (e) => {
+                    clearTimeout(t);
+                    tempAudio.onloadedmetadata = null;
+                    tempAudio.oncanplay = null;
+                    tempAudio.oncanplaythrough = null;
+                    tempAudio.onerror = null;
                     console.warn(`[预加载] ⚠️ ${audioFile} 预加载失败`);
                     failedCount++;
-                    resolve(); // 即使失败也继续
-                  };
-                  
-                  // 设置超时
-                  setTimeout(() => {
-                    console.warn(`[预加载] ⏰ ${audioFile} 预加载超时`);
-                    failedCount++;
                     resolve();
-                  }, 5000);
+                  };
+                  tempAudio.onloadedmetadata = onSuccess;
+                  tempAudio.oncanplay = onSuccess;
+                  tempAudio.oncanplaythrough = onSuccess;
+                  tempAudio.onerror = onError;
+
+                  // 3) 一定要保存并在成功/失败时 clearTimeout
+                  const t = setTimeout(() => {
+                    onError(new Error('timeout'));
+                  }, 12000); // 适当放宽到 12s，避免慢网/冷缓存误判
                 });
               } catch (error) {
                 console.warn(`[预加载] ❌ ${audioFile} 预加载异常:`, error);

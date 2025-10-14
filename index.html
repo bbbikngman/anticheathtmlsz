@@ -392,6 +392,7 @@
       <section class="controls">
         <button id="connectButton" class="primary">开始对话</button>
         <button id="disconnectButton" class="danger" disabled>断开连接</button>
+        <button id="exportLogsButton" class="primary">导出日志</button>
       </section>
 
       <section class="meter">
@@ -442,6 +443,311 @@
        * 
        * 3) 播放 Bot 的音频（来自 Agora）= 订阅 remoteAudioTrack.play('remoteAudio')，这既不是前端静态音频，也不是后端直链。
        */
+
+      /************** ① 捕捉 F12 控制台日志（log/info/warn/error/debug + 全局错误） **************/
+      (function setupConsoleCapture() {
+        const levels = ["log", "info", "warn", "error", "debug"];
+        const original = {};
+        const MAX_LOGS = 20000; // 为了安全做个上限；需要放开可以改大
+        window.__consoleLogs = [];
+
+        function argToString(a) {
+          try {
+            if (a instanceof Error) return a.stack || (a.name + ": " + a.message);
+            if (typeof a === "object" && a !== null) {
+              // 安全 stringify（处理循环引用/DOM）
+              const seen = new WeakSet();
+              return JSON.stringify(
+                a,
+                (k, v) => {
+                  if (typeof v === "object" && v !== null) {
+                    if (seen.has(v)) return "[Circular]";
+                    if (v instanceof Node) return `[DOM:${v.nodeName}]`;
+                    seen.add(v);
+                  }
+                  return v;
+                },
+                2
+              );
+            }
+            return String(a);
+          } catch {
+            try { return String(a); } catch { return "[Unserializable]"; }
+          }
+        }
+
+        levels.forEach((level) => {
+          original[level] = console[level].bind(console);
+          console[level] = function (...args) {
+            try {
+              window.__consoleLogs.push({
+                ts: Date.now(),
+                level,
+                args: args.map(argToString),
+              });
+              if (window.__consoleLogs.length > MAX_LOGS) {
+                window.__consoleLogs.splice(0, window.__consoleLogs.length - MAX_LOGS);
+              }
+            } catch {}
+            original[level](...args);
+          };
+        });
+
+        window.addEventListener("error", (e) => {
+          try {
+            window.__consoleLogs.push({
+              ts: Date.now(),
+              level: "error",
+              args: [
+                `UncaughtError: ${e.message}`,
+                `${e.filename}:${e.lineno}:${e.colno}`,
+              ],
+            });
+          } catch {}
+        });
+
+        window.addEventListener("unhandledrejection", (e) => {
+          try {
+            const reason = e && e.reason !== undefined ? e.reason : "unknown";
+            window.__consoleLogs.push({
+              ts: Date.now(),
+              level: "error",
+              args: [`UnhandledRejection: ${argToString(reason)}`],
+            });
+          } catch {}
+        });
+
+        // 导出为纯文本
+        window.__getConsoleLogText = function () {
+          return (window.__consoleLogs || [])
+            .map(({ ts, level, args }) => {
+              const t = new Date(ts).toLocaleString();
+              return `[${t}] [${level.toUpperCase()}] ${args.join(" ")}`;
+            })
+            .join("\n");
+        };
+      })();
+
+      /************** ② 把 UI 区域日志 + 页面状态 汇总成文本 **************/
+      function getUiLogText() {
+        const container = document.getElementById("logContainer");
+        if (!container) return "";
+        const items = container.querySelectorAll(".log-entry");
+        const lines = [];
+        items.forEach((n) => {
+          const t = (n.querySelector("time")?.textContent || "").trim();
+          const s = (n.querySelector(".source")?.textContent || "日志").trim();
+          // 取该条里所有 <div> 的文本作为内容
+          const content = Array.from(n.querySelectorAll("div"))
+            .map((d) => (d.textContent || "").trim())
+            .filter(Boolean)
+            .join(" ");
+          lines.push(`${t}  ${s}  ${content}`);
+        });
+        return lines.join("\n");
+      }
+
+      function buildUserInfoText() {
+        // 你的信息栏关键字段
+        const get = (el) => (el ? el.textContent.trim() : "-");
+        const info = [
+          `时间: ${new Date().toLocaleString()}`,
+          `URL: ${location.href}`,
+          `UA: ${navigator.userAgent}`,
+          `平台: ${navigator.platform || "n/a"}`,
+          `语言: ${navigator.language || "n/a"}`,
+          `窗口: ${window.innerWidth}x${window.innerHeight}`,
+          `网络: ${
+            navigator.connection
+              ? `${navigator.connection.effectiveType || "n/a"}, ${navigator.connection.downlink || "?"}Mb/s`
+              : "n/a"
+          }`,
+        ];
+
+        const els = {
+          connectionStatus: document.getElementById("connectionStatus"),
+          channelName: document.getElementById("channelName"),
+          localUid: document.getElementById("localUid"),
+          remoteUid: document.getElementById("remoteUid"),
+          remoteVolume: document.getElementById("remoteVolume"),
+          wsStatusText: document.getElementById("wsStatusText"),
+          wsMessageCount: document.getElementById("wsMessageCount"),
+          micLevel: document.getElementById("micLevel"),
+        };
+
+        const state = [
+          `连接状态: ${get(els.connectionStatus)}`,
+          `频道: ${get(els.channelName)}`,
+          `本地UID: ${get(els.localUid)}`,
+          `远端UID: ${get(els.remoteUid)}`,
+          `Bot音量: ${get(els.remoteVolume)}`,
+          `WebSocket: ${get(els.wsStatusText)}，消息数 ${get(els.wsMessageCount)}`,
+          `麦克风电平: ${get(els.micLevel)}`,
+        ];
+
+        return `--- 环境信息 ---\n${info.join("\n")}\n\n--- 页面状态 ---\n${state.join("\n")}`;
+      }
+
+      /************** ③ 兼容性最强的弹窗（含：全选 + 复制 按钮） **************/
+      function showLogsInPopup(fullText) {
+        // 蒙层
+        const mask = document.createElement("div");
+        Object.assign(mask.style, {
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.6)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "16px",
+        });
+
+        // 面板
+        const panel = document.createElement("div");
+        Object.assign(panel.style, {
+          width: "min(920px, 96vw)",
+          background: "#fff",
+          borderRadius: "14px",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        });
+
+        // 工具条
+        const toolbar = document.createElement("div");
+        Object.assign(toolbar.style, {
+          display: "flex",
+          gap: "8px",
+          padding: "12px",
+          borderBottom: "1px solid #e2e8f0",
+          background: "#f7fafc",
+          alignItems: "center",
+          justifyContent: "space-between",
+        });
+        const left = document.createElement("div");
+        left.textContent = "已汇总：页面信息 + UI日志 + 控制台日志";
+        Object.assign(left.style, { color: "#2d3748", fontWeight: "600" });
+
+        const btnWrap = document.createElement("div");
+        Object.assign(btnWrap.style, { display: "flex", gap: "8px" });
+
+        function mkBtn(text, color) {
+          const b = document.createElement("button");
+          b.textContent = text;
+          Object.assign(b.style, {
+            border: "none",
+            borderRadius: "999px",
+            padding: "8px 16px",
+            fontWeight: "700",
+            cursor: "pointer",
+            color: "#fff",
+            background: color,
+          });
+          return b;
+        }
+        const btnSelectAll = mkBtn("全选", "#3182ce");
+        const btnCopy = mkBtn("复制", "#38a169");
+        const btnClose = mkBtn("关闭", "#e53e3e");
+
+        btnWrap.append(btnSelectAll, btnCopy, btnClose);
+        toolbar.append(left, btnWrap);
+
+        // 文本区域（用 textarea，移动端/微信可长按）
+        const ta = document.createElement("textarea");
+        ta.value = fullText;
+        ta.readOnly = true;
+        Object.assign(ta.style, {
+          width: "100%",
+          height: "70vh",
+          border: "none",
+          outline: "none",
+          padding: "12px 16px",
+          fontFamily: "Consolas, Monaco, monospace",
+          fontSize: "13px",
+          whiteSpace: "pre-wrap",
+          boxSizing: "border-box",
+        });
+
+        panel.append(toolbar, ta);
+        mask.append(panel);
+        document.body.appendChild(mask);
+
+        // 事件
+        btnClose.onclick = () => mask.remove();
+
+        btnSelectAll.onclick = () => {
+          ta.focus();
+          ta.select();
+          // iOS 兼容：setSelectionRange
+          try { ta.setSelectionRange(0, ta.value.length); } catch {}
+        };
+
+        btnCopy.onclick = async () => {
+          // 先尝试 Clipboard API（安全上下文）
+          let ok = false;
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(ta.value);
+              ok = true;
+            }
+          } catch {}
+          // 再退回 execCommand
+          if (!ok) {
+            try {
+              ta.focus();
+              ta.select();
+              try { ta.setSelectionRange(0, ta.value.length); } catch {}
+              ok = document.execCommand("copy");
+            } catch { ok = false; }
+          }
+          // 提示
+          const tip = document.createElement("div");
+          tip.textContent = ok ? "✅ 已复制到剪贴板" : "❌ 复制失败，请长按文本手动复制";
+          Object.assign(tip.style, {
+            position: "absolute",
+            bottom: "12px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: ok ? "#48bb78" : "#e53e3e",
+            color: "#fff",
+            padding: "6px 12px",
+            borderRadius: "999px",
+            fontWeight: "700",
+            fontSize: "12px",
+          });
+          panel.appendChild(tip);
+          setTimeout(() => tip.remove(), 1800);
+        };
+
+        // 打开时默认把光标放进去，便于手动长按
+        setTimeout(() => { ta.focus(); }, 50);
+      }
+
+      /************** ④ "导出日志"按钮点击逻辑（自动汇总三类内容） **************/
+      function collectAllLogsText() {
+        const userInfo = buildUserInfoText();
+        const uiLogs = getUiLogText();
+        const consoleLogs =
+          (window.__getConsoleLogText && window.__getConsoleLogText()) || "";
+
+        const lines = [
+          "===================== 调试日志导出 =====================",
+          new Date().toLocaleString(),
+          "========================================================",
+          "",
+          userInfo,
+          "",
+          "--- UI 日志（页面可见区域） ---",
+          uiLogs || "(无)",
+          "",
+          "--- Console 日志（F12 控制台） ---",
+          consoleLogs || "(无)",
+          "",
+        ];
+        return lines.join("\n");
+      }
 
       // === AudioGate：一次解锁，后续任意播放 ===
       function createAudioGate({ poolSize = 4 } = {}) {
@@ -2110,6 +2416,22 @@
         await enterAndJoin();       // 然后照常入会
       });
       elements.disconnectButton.addEventListener("click", disconnect);
+
+      // 绑定导出日志按钮事件
+      const exportLogsButton = document.getElementById("exportLogsButton");
+      if (exportLogsButton) {
+        exportLogsButton.addEventListener("click", () => {
+          const fullText = collectAllLogsText();
+
+          // 如果文本特别大，给个温柔提示（不截断）
+          if (fullText.length > 2_000_000) {
+            console.warn("[导出日志] 日志文本较大（>2MB），复制可能较慢。");
+          }
+
+          // 微信 / iPhone 友好：弹窗 + 全选/复制按钮
+          showLogsInPopup(fullText);
+        });
+      }
 
       elements.volumeSlider.addEventListener("input", (event) => {
         const volume = Number(event.target.value || "70");

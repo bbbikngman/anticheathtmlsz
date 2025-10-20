@@ -2514,45 +2514,49 @@
       // Dify App Selection Logic
       async function setDifyApp(appId) {
           try {
-            // Determine language based on appId
-            let lang = 'zh'; // Default to Chinese
-            if (appId === 'dify_app_2') { // dify_app_2 is '风险提示en'
-                lang = 'en';
-            }
+            // 映射 appId 到语言和豆包语音类型
+            const appConfig = {
+                'dify_app_1': { lang: 'zh', voice: 'zh_female_vv_uranus_bigtts' }, // 风险提示cn
+                'dify_app_2': { lang: 'en', voice: 'en_female_candice_emo_v2_mars_bigtts' }, // 风险提示en
+                'fraud_drill': { lang: 'zh', voice: 'ICL_zh_male_chenwenmingzai_cs_tob' },   // 诈骗演练
+                'psychological_counseling': { lang: 'zh', voice: 'zh_female_vv_uranus_bigtts' } // 心理疏导
+            };
+
+            const config = appConfig[appId] || { lang: 'zh', voice: 'zh_female_vv_uranus_bigtts' }; // 默认值
+            const { lang, voice } = config;
 
             // 使用GET请求并添加随机参数防止缓存
-            const response = await fetch(`${API_BASE_URL}/api/set_dify_app?app_id=${appId}&lang=${lang}&_t=${Date.now()}`, {
-            method: 'GET',
-          });
-          const result = await response.json();
-          if (result.ok) {
-            const appName = result.app_info ? result.app_info.name : appId;
-            log('系统', `Dify 应用已切换到: ${appName}`, 'success');
-            
-            // Update button styles - remove active class from all connect buttons
-            const connectButtons = document.querySelectorAll('.connect-app-button');
-            connectButtons.forEach(btn => btn.classList.remove('active'));
-            
-            // Add active class to the clicked button based on app_id
-            const buttonMap = {
-              'dify_app_1': 'connectToApp1Button',
-              'dify_app_2': 'connectToApp2Button', 
-              'fraud_drill': 'connectToFraudDrillButton',
-              'psychological_counseling': 'connectToPsychButton'
-            };
-            
-            const targetButtonId = buttonMap[appId];
-            if (targetButtonId) {
-              const targetButton = document.getElementById(targetButtonId);
-              if (targetButton) {
-                targetButton.classList.add('active');
-              }
+            const url = `${API_BASE_URL}/api/set_dify_app?app_id=${appId}&lang=${lang}&doubao_voice_type=${voice}&_t=${Date.now()}`;
+            const response = await fetch(url, { method: 'GET' });
+
+            const result = await response.json();
+            if (result.ok) {
+                const appName = result.app_info ? result.app_info.name : appId;
+                log('系统', `Dify 应用已切换到: ${appName}`, 'success');
+                
+                // 更新按钮样式
+                const connectButtons = document.querySelectorAll('.connect-app-button');
+                connectButtons.forEach(btn => btn.classList.remove('active'));
+                
+                const buttonMap = {
+                    'dify_app_1': 'connectToApp1Button',
+                    'dify_app_2': 'connectToApp2Button',
+                    'fraud_drill': 'connectToFraudDrillButton',
+                    'psychological_counseling': 'connectToPsychButton'
+                };
+                
+                const targetButtonId = buttonMap[appId];
+                if (targetButtonId) {
+                    const targetButton = document.getElementById(targetButtonId);
+                    if (targetButton) {
+                        targetButton.classList.add('active');
+                    }
+                }
+            } else {
+                log('系统', `切换失败: ${result.error}`, 'error');
             }
-          } else {
-            log('系统', `Dify 应用切换失败: ${result.error}`, 'error');
-          }
         } catch (error) {
-          log('系统', `Dify 应用切换请求失败: ${error.message}`, 'error');
+            log('系统', `切换应用时出错: ${error}`, 'error');
         }
       }
 

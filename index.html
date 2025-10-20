@@ -971,6 +971,8 @@
           } catch (e) {
             lastError = e;
             console.warn(`[loadAudioWithRetry] ❌ 第${i + 1}次失败: ${e.message} → ${url}`);
+            // ✅ 加这一行：打印真实错误类型和堆栈
+            console.warn(`[loadAudioWithRetry] 📄 详细错误:`, e, e.stack);
             
             // 指数退避，但不要在最后一次重试后等待
             if (i < maxTry - 1) {

@@ -2518,28 +2518,38 @@
       });
 
       // Dify App Selection Logic
-      const difyApp1Button = document.getElementById("difyApp1Button");
-      const difyApp2Button = document.getElementById("difyApp2Button");
-
-      async function setDifyApp(appName) {
+      async function setDifyApp(appId) {
         try {
           const response = await fetch('/api/set_dify_app', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ app_name: appName }),
+            body: JSON.stringify({ app_id: appId }),
           });
           const result = await response.json();
           if (result.ok) {
+            const appName = result.app_info ? result.app_info.name : appId;
             log('系统', `Dify 应用已切换到: ${appName}`, 'success');
-            // Update button styles
-            if (appName === 'dify_app_1') {
-              difyApp1Button.classList.add('active');
-              difyApp2Button.classList.remove('active');
-            } else {
-              difyApp1Button.classList.remove('active');
-              difyApp2Button.classList.add('active');
+            
+            // Update button styles - remove active class from all connect buttons
+            const connectButtons = document.querySelectorAll('.connect-app-button');
+            connectButtons.forEach(btn => btn.classList.remove('active'));
+            
+            // Add active class to the clicked button based on app_id
+            const buttonMap = {
+              'dify_app_1': 'connectToApp1Button',
+              'dify_app_2': 'connectToApp2Button', 
+              'fraud_drill': 'connectToFraudDrillButton',
+              'psychological_counseling': 'connectToPsychButton'
+            };
+            
+            const targetButtonId = buttonMap[appId];
+            if (targetButtonId) {
+              const targetButton = document.getElementById(targetButtonId);
+              if (targetButton) {
+                targetButton.classList.add('active');
+              }
             }
           } else {
             log('系统', `Dify 应用切换失败: ${result.error}`, 'error');
@@ -2549,8 +2559,7 @@
         }
       }
 
-      difyApp1Button.addEventListener("click", () => setDifyApp('dify_app_1'));
-      difyApp2Button.addEventListener("click", () => setDifyApp('dify_app_2'));
+
 
 
 

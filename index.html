@@ -1,4 +1,31 @@
+  <!-- /*
+    JavaScript Functions Index:
+    - getStatus (line 410): Fetches the system status from the server.
+    - getAgoraConfig (line 414): Fetches the Agora configuration from the server.
+    - rtcInit (line 418): Initializes the RTC system on the server.
+    - rtcEnter (line 422): Enters an RTC room on the server.
+    - rtcBeat (line 426): Sends a heartbeat to the server to keep the room lock alive.
+    - rtcLeave (line 430): Leaves the RTC room on the server.
+    - rtcWelcome (line 434): Sends a welcome message through the RTC system.
+    - rtcStatus (line 438): Fetches the RTC system status from the server.
+    - rtcShutdown (line 442): Shuts down the RTC system on the server.
+    - textInput (line 446): Sends text input to the server.
+    - setDifyApp (line 450): Sets the Dify app on the server.
+    - updateStatus (line 455): Updates the status display on the page.
+    - updateAgoraConfig (line 461): Updates the Agora configuration display on the page.
+    - updateRtcStatus (line 467): Updates the RTC status display on the page.
+    - onRtcInit (line 473): Handles the response from the rtcInit function.
+    - onRtcEnter (line 479): Handles the response from the rtcEnter function.
+    - onRtcBeat (line 485): Handles the response from the rtcBeat function.
+    - onRtcLeave (line 491): Handles the response from the rtcLeave function.
+    - onRtcWelcome (line 497): Handles the response from the rtcWelcome function.
+    - onRtcShutdown (line 503): Handles the response from the rtcShutdown function.
+    - onTextInput (line 509): Handles the response from the textInput function.
+    - onSetDifyApp (line 515): Handles the response from the setDifyApp function.
+    - init (line 521): Initializes the page by fetching the status and configuration.
+    */ -->
 <!DOCTYPE html>
+
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
@@ -412,6 +439,7 @@
     </div>
 
     <script>
+  
       /**
        * 路由原则：
        * 1) 预录音频 & cache_index.json 统一从后端读取：
@@ -971,8 +999,6 @@
           } catch (e) {
             lastError = e;
             console.warn(`[loadAudioWithRetry] ❌ 第${i + 1}次失败: ${e.message} → ${url}`);
-            // ✅ 加这一行：打印真实错误类型和堆栈
-            console.warn(`[loadAudioWithRetry] 📄 详细错误:`, e, e.stack);
             
             // 指数退避，但不要在最后一次重试后等待
             if (i < maxTry - 1) {
@@ -996,8 +1022,8 @@
       // 生产环境配置：API调用使用后端服务器，静态资源使用相对路径
       const API_BASE_URL = backendBaseUrl;
       
-      // 修改为本地路径，避免后端nginx缓存
-      const PREREC_BASE = `prerecorded_audio`;
+      // 新增一行（放在上面附近即可）
+      const PREREC_BASE = `${backendBaseUrl}/prerecorded_audio`;
 
       // 静态资源一律相对路径；该函数只是确保不会出现以 / 开头的根路径导致跳到站点根
       const staticPath = (p) => (p || "").replace(/^\/+/, "");
@@ -2596,7 +2622,7 @@
             if (appId === 'dify_app_2') { // dify_app_2 is '风险提示en'
                 lang = 'en';
             }
-
+            log('系统', `正在切换到 Dify 应用: ${appId} (语言: ${lang})`);
             // 使用GET请求并添加随机参数防止缓存
             const response = await fetch(`${API_BASE_URL}/api/set_dify_app?app_id=${appId}&lang=${lang}&_t=${Date.now()}`, {
             method: 'GET',

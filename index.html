@@ -996,8 +996,8 @@
       // 生产环境配置：API调用使用后端服务器，静态资源使用相对路径
       const API_BASE_URL = backendBaseUrl;
       
-      // 新增一行（放在上面附近即可）
-      const PREREC_BASE = `${backendBaseUrl}/prerecorded_audio`;
+      // 修改为本地路径，避免后端nginx缓存
+      const PREREC_BASE = `prerecorded_audio`;
 
       // 静态资源一律相对路径；该函数只是确保不会出现以 / 开头的根路径导致跳到站点根
       const staticPath = (p) => (p || "").replace(/^\/+/, "");

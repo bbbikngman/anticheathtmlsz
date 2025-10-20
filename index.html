@@ -406,10 +406,10 @@
 
       <section class="controls">
         <!-- 四个连接到特定Dify应用的按钮 -->
-        <button id="connectToApp1Button" class="primary connect-app-button" data-app="dify_app_1">连接到通用应用</button>
-        <button id="connectToApp2Button" class="primary connect-app-button" data-app="dify_app_2">连接到反诈应用</button>
-        <button id="connectToFraudDrillButton" class="primary connect-app-button" data-app="fraud_drill">连接到反诈演练</button>
-        <button id="connectToPsychButton" class="primary connect-app-button" data-app="psychological_counseling">连接到心理咨询</button>
+        <button id="connectToApp1Button" class="primary connect-app-button" data-app="dify_app_1">连接到风险提示cn</button>
+        <button id="connectToApp2Button" class="primary connect-app-button" data-app="dify_app_2">连接到风险提示en</button>
+        <button id="connectToFraudDrillButton" class="primary connect-app-button" data-app="fraud_drill">连接到诈骗演练</button>
+        <button id="connectToPsychButton" class="primary connect-app-button" data-app="psychological_counseling">连接到心理疏导</button>
         
         <button id="disconnectButton" class="danger" disabled>断开连接</button>
         <button id="exportLogsButton" class="primary">导出日志</button>
@@ -438,13 +438,7 @@
 
       <div id="remoteAudio"></div>
 
-      <footer>
-        <div>
-          调试命令：<code
-            >curl https://cityuantifraud.cn/api/agora/config</code
-          >
-        </div>
-      </footer>
+    
     </div>
 
     <script>
@@ -2519,13 +2513,10 @@
 
       // Dify App Selection Logic
       async function setDifyApp(appId) {
-        try {
-          const response = await fetch('/api/set_dify_app', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ app_id: appId }),
+          try {
+            // 使用GET请求并添加随机参数防止缓存
+            const response = await fetch(`/api/set_dify_app?app_id=${appId}&_t=${Date.now()}`, {
+            method: 'GET',
           });
           const result = await response.json();
           if (result.ok) {

@@ -124,6 +124,15 @@
         opacity: 0.6;
         cursor: not-allowed;
       }
+
+      /* 连接按钮特定样式 */
+      .connect-app-button {
+        margin: 4px;
+        padding: 10px 20px;
+        font-size: 0.9rem;
+        min-width: 140px;
+      }
+
       /* 一个没用的注释，触发重启 */
       .meter {
         background: #edf2f7;
@@ -396,21 +405,15 @@
       </section>
 
       <section class="controls">
-        <button id="connectButton" class="primary">开始对话</button>
+        <!-- 四个连接到特定Dify应用的按钮 -->
+        <button id="connectToApp1Button" class="primary connect-app-button" data-app="dify_app_1">连接到通用应用</button>
+        <button id="connectToApp2Button" class="primary connect-app-button" data-app="dify_app_2">连接到反诈应用</button>
+        <button id="connectToFraudDrillButton" class="primary connect-app-button" data-app="fraud_drill">连接到反诈演练</button>
+        <button id="connectToPsychButton" class="primary connect-app-button" data-app="psychological_counseling">连接到心理咨询</button>
+        
         <button id="disconnectButton" class="danger" disabled>断开连接</button>
         <button id="exportLogsButton" class="primary">导出日志</button>
       </section>
-
-      <!-- Dify App Selection -->
-      <div class="controls-panel">
-        <div class="control-group">
-          <span class="control-label">选择Dify应用:</span>
-          <div class="buttons">
-            <button id="difyApp1Button" class="control-button" data-app="dify_app_1" onclick="setDifyApp('dify_app_1')">通用应用</button>
-            <button id="difyApp2Button" class="control-button active" data-app="dify_app_2" onclick="setDifyApp('dify_app_2')">反诈应用</button>
-          </div>
-        </div>
-      </div>
 
       <section class="meter">
         <div>
@@ -999,7 +1002,10 @@
         localUid: document.getElementById("localUid"),
         remoteUid: document.getElementById("remoteUid"),
         remoteVolume: document.getElementById("remoteVolume"),
-        connectButton: document.getElementById("connectButton"),
+        connectToApp1Button: document.getElementById("connectToApp1Button"),
+        connectToApp2Button: document.getElementById("connectToApp2Button"),
+        connectToFraudDrillButton: document.getElementById("connectToFraudDrillButton"),
+        connectToPsychButton: document.getElementById("connectToPsychButton"),
         disconnectButton: document.getElementById("disconnectButton"),
         volumeSlider: document.getElementById("volumeSlider"),
         micLevel: document.getElementById("micLevel"),
@@ -1871,7 +1877,7 @@
         }
 
         setConnectionState("offline", "已断开连接");
-        elements.connectButton.disabled = false;
+        setConnectButtonsDisabled(false);
         isConnecting = false;
       }
 
@@ -1882,7 +1888,7 @@
         isConnecting = true;
         
         setConnectionState("idle", "正在初始化RTC系统...");
-        elements.connectButton.disabled = true;
+        setConnectButtonsDisabled(true);
         log("系统", "开始初始化RTC系统...");
 
         try {
@@ -1934,7 +1940,7 @@
               log("系统", `进入房间失败: ${r.reason}`, "error");
             }
             setConnectionState("offline", "进入房间失败");
-            elements.connectButton.disabled = false;
+            setConnectButtonsDisabled(false);
             isConnecting = false;
             return;
           }
@@ -2257,9 +2263,9 @@
         } finally {
           isConnecting = false;
           if (!elements.disconnectButton.disabled) {
-            elements.connectButton.disabled = true;
+            setConnectButtonsDisabled(true);
           } else {
-            elements.connectButton.disabled = false;
+            setConnectButtonsDisabled(false);
           }
         }
       }
@@ -2455,13 +2461,36 @@
 
       
     
-      // 修改为先解锁音频再入会
-      elements.connectButton.addEventListener("click", async () => {
-        await AudioGate.unlock();   // ✅ 一次性解锁
-        flushPendingAudio();         // ✅ 一次性处理未解锁期间积压的播放
-        preloadAudioFiles();         // ✅ 解锁后预加载音频文件，避免移动端过早拉资源
-        await enterAndJoin();       // 然后照常入会
-      });
+      // 管理连接按钮状态的辅助函数
+      function setConnectButtonsDisabled(disabled) {
+        elements.connectToApp1Button.disabled = disabled;
+        elements.connectToApp2Button.disabled = disabled;
+        elements.connectToFraudDrillButton.disabled = disabled;
+        elements.connectToPsychButton.disabled = disabled;
+      }
+
+      // 连接到特定Dify应用的通用函数
+      async function connectToApp(appKey) {
+        try {
+          // 1. 先切换到指定的Dify应用
+          log("系统", `正在切换到应用: ${appKey}`);
+          await setDifyApp(appKey);
+          
+          // 2. 然后执行连接逻辑
+          await AudioGate.unlock();   // ✅ 一次性解锁
+          flushPendingAudio();         // ✅ 一次性处理未解锁期间积压的播放
+          preloadAudioFiles();         // ✅ 解锁后预加载音频文件，避免移动端过早拉资源
+          await enterAndJoin();       // 然后照常入会
+        } catch (error) {
+          log("错误", `连接到应用 ${appKey} 失败: ${error.message}`);
+        }
+      }
+
+      // 为四个连接按钮添加事件监听器
+      elements.connectToApp1Button.addEventListener("click", () => connectToApp('dify_app_1'));
+      elements.connectToApp2Button.addEventListener("click", () => connectToApp('dify_app_2'));
+      elements.connectToFraudDrillButton.addEventListener("click", () => connectToApp('fraud_drill'));
+      elements.connectToPsychButton.addEventListener("click", () => connectToApp('psychological_counseling'));
       elements.disconnectButton.addEventListener("click", disconnect);
 
       // 绑定导出日志按钮事件

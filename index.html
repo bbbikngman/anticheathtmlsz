@@ -2515,7 +2515,7 @@
       async function setDifyApp(appId) {
           try {
             // 使用GET请求并添加随机参数防止缓存
-            const response = await fetch(`/api/set_dify_app?app_id=${appId}&_t=${Date.now()}`, {
+            const response = await fetch(`${API_BASE_URL}/api/set_dify_app?app_id=${appId}&_t=${Date.now()}`, {
             method: 'GET',
           });
           const result = await response.json();

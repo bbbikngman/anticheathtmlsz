@@ -166,37 +166,7 @@
         transition: width 0.1s ease;
       }
 
-      .conversation-log {
-        background: #f7fafc;
-        border-radius: 14px;
-        border: 1px solid #e2e8f0;
-        padding: 18px;
-        max-height: 260px;
-        overflow-y: auto;
-      }
 
-      .log-entry {
-        margin-bottom: 12px;
-        padding-bottom: 12px;
-        border-bottom: 1px dashed rgba(160, 174, 192, 0.5);
-      }
-
-      .log-entry:last-child {
-        border-bottom: none;
-      }
-
-      .log-entry time {
-        display: block;
-        font-size: 0.8rem;
-        color: #718096;
-        margin-bottom: 4px;
-      }
-
-      .log-entry strong {
-        display: inline-block;
-        min-width: 70px;
-        color: #2b6cb0;
-      }
 
       .volume-control {
         display: flex;
@@ -883,6 +853,138 @@
       
       // 全局只建一次 AudioGate 实例
       const AudioGate = createAudioGate({ poolSize: 4 });
+
+      // ==========  音频"全杀"函数  ==========
+      function stopAllAudios() {
+        console.log('[stopAllAudios] 🛑 开始停止所有音频...');
+        
+        // 1. 杀掉 AudioGate 池里所有 <audio>
+        if (AudioGate && AudioGate.pool) {
+          AudioGate.pool.forEach((el, index) => {
+            try {
+              if (el && !el.paused) {
+                el.pause();
+                el.currentTime = 0;
+                el.src = '';          // 释放缓存
+                el.load();
+                console.log(`[stopAllAudios] ✅ 停止AudioGate池音频 ${index}`);
+              }
+            } catch (e) {
+              console.warn(`[stopAllAudios] ⚠️ 停止AudioGate池音频 ${index} 失败:`, e.message);
+            }
+          });
+        }
+        
+        // 2. 暂停 WebAudio 侧（不关闭上下文，避免下次进房间失败）
+        if (AudioGate && AudioGate.ctx && AudioGate.ctx.state === 'running') {
+          try {
+            AudioGate.ctx.suspend().catch(() => {});
+            console.log('[stopAllAudios] ✅ 暂停WebAudio上下文');
+          } catch (e) {
+            console.warn('[stopAllAudios] ⚠️ 暂停WebAudio上下文失败:', e.message);
+          }
+        }
+        
+        // 3. 杀掉预录制音频
+        if (prerecAudioEl) {
+          try {
+            if (prerecAudioEl.pause) {          // <audio>
+              prerecAudioEl.pause();
+              prerecAudioEl.currentTime = 0;
+              console.log('[stopAllAudios] ✅ 停止预录制音频(HTMLAudioElement)');
+            } else if (prerecAudioEl.stop) {    // AudioBufferSourceNode
+              prerecAudioEl.stop();
+              console.log('[stopAllAudios] ✅ 停止预录制音频(AudioBufferSourceNode)');
+            }
+          } catch (e) {
+            console.warn('[stopAllAudios] ⚠️ 停止预录制音频失败:', e.message);
+          }
+          prerecAudioEl = null;
+          prerecPlayingKey = null;
+        }
+        
+        // 4. 清空排队
+        if (typeof pendingAudioQueue !== 'undefined') {
+          const queueLength = pendingAudioQueue.length;
+          pendingAudioQueue.length = 0;
+          if (queueLength > 0) {
+            console.log(`[stopAllAudios] ✅ 清空音频队列 ${queueLength} 项`);
+          }
+        }
+        
+        console.log('[stopAllAudios] 🎯 所有音频已停止');
+      }
+
+      // ==========  带重试的音频加载器  ==========
+      async function loadAudioWithRetry(url, maxTry = 3, timeout = 8000) {
+        let lastError = null;
+        console.log(`[loadAudioWithRetry] 🔄 开始加载音频: ${url}`);
+        
+        for (let i = 0; i < maxTry; i++) {
+          try {
+            console.log(`[loadAudioWithRetry] 📡 第${i + 1}次尝试加载: ${url}`);
+            
+            // 1. 先用 fetch 探测（能 catch 404/CORS/超时）
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), timeout);
+            const r = await fetch(url, { signal: ctrl.signal, mode: 'cors' });
+            clearTimeout(t);
+            
+            if (!r.ok) {
+              throw new Error(`HTTP ${r.status} ${r.statusText}`);
+            }
+            console.log(`[loadAudioWithRetry] ✅ HTTP请求成功: ${url}`);
+
+            // 2. 再用 <audio> 验证能否解码
+            const audio = new Audio(url);
+            audio.crossOrigin = 'anonymous';
+            audio.preload = 'auto';
+            
+            await new Promise((res, rej) => {
+              const cleanup = () => {
+                audio.oncanplaythrough = null;
+                audio.onerror = null;
+              };
+              
+              // 只保留最稳的事件，避免重复触发
+              audio.oncanplaythrough = () => {
+                cleanup();
+                console.log(`[loadAudioWithRetry] ✅ 音频解码成功: ${url}`);
+                res();
+              };
+              
+              audio.onerror = () => {
+                cleanup();
+                rej(audio.error || new Error('decode failed'));
+              };
+              
+              // 保险：最长等待时间
+              setTimeout(() => {
+                cleanup();
+                rej(new Error('decode timeout'));
+              }, timeout);
+            });
+            
+            console.log(`[loadAudioWithRetry] 🎉 音频加载完全成功: ${url}`);
+            return audio;          // 返回可用的 audio 元素
+            
+          } catch (e) {
+            lastError = e;
+            console.warn(`[loadAudioWithRetry] ❌ 第${i + 1}次失败: ${e.message} → ${url}`);
+            
+            // 指数退避，但不要在最后一次重试后等待
+            if (i < maxTry - 1) {
+              const delay = 1000 * Math.pow(2, i);
+              console.log(`[loadAudioWithRetry] ⏳ 等待 ${delay}ms 后重试...`);
+              await new Promise(r => setTimeout(r, delay));
+            }
+          }
+        }
+        
+        // 所有重试都挂
+        console.error(`[loadAudioWithRetry] 💥 所有重试失败: ${url}`, lastError);
+        throw lastError;
+      }
       
       let localTrack = null;
       let microphoneAudioTrack = null; // 添加缺失的变量定义
@@ -947,8 +1049,13 @@
       }
       
       // 播放排队相关函数
-      function doPlay(audioUrl, audioData) {
-        AudioGate.play(audioUrl, { volume: 1.0 }).then(player => {
+      async function doPlay(audioUrl, audioData) {
+        try {
+          // 1. 保险加载（带重试）
+          await loadAudioWithRetry(audioUrl);
+
+          // 2. 真正播放
+          const player = await AudioGate.play(audioUrl, { volume: 1.0 });
           prerecAudioEl = player;
 
           // 结束清理（同时兼容 <audio> 与 WebAudio）
@@ -963,13 +1070,13 @@
               prerecAudioEl = null; 
             };
           }
-        }).catch(err => {
-          console.error('[预录制音频] ❌ 播放失败:', err);
-          log('系统', `预录制音频播放失败: ${err.message}`, 'error');
-          prerecPlayingKey = null; 
+        } catch (err) {
+          console.error('[预录制音频] ❌ 加载或播放失败:', err);
+          log('系统', `音频加载失败: ${err.message}`, 'error');
+          showErrorPopup('音频加载失败', `${audioData.text ? `"${audioData.text}"` : '预录制音频'} 无法加载，请检查网络或联系管理员`);
+          prerecPlayingKey = null;
           prerecAudioEl = null;
-          // 如需：这里可继续调用 tryAlternativeUrls(audioUrl, audioData, 0)
-        });
+        }
       }
 
       function enqueueOrPlay(audioUrl, audioData) {
@@ -1197,48 +1304,13 @@
                 const audioPath = `prerecorded_audio/audio_files/${audioFile}`;
                 const audioUrl = encodeURI(buildAudioURL(audioPath));
                 
-                // 使用 AudioGate 的音频池预加载
-                // 这里我们不实际播放，只是让浏览器缓存这些文件
-                const tempAudio = new Audio(audioUrl);
-                tempAudio.crossOrigin = 'anonymous';
-                tempAudio.preload = 'auto';
-                tempAudio.volume = 0;
-                
-                return new Promise((resolve) => {
-                  // 2) 成功标准放宽：loadedmetadata / canplay / canplaythrough 任一触发即算成功
-                  const onSuccess = (evt) => {
-                    clearTimeout(t);
-                    tempAudio.onloadedmetadata = null;
-                    tempAudio.oncanplay = null;
-                    tempAudio.oncanplaythrough = null;
-                    tempAudio.onerror = null;
-                    console.log(`[预加载] ✅ ${audioFile} 预加载成功（${evt?.type}）`);
-                    loadedCount++;
-                    resolve();
-                  };
-                  const onError = (e) => {
-                    clearTimeout(t);
-                    tempAudio.onloadedmetadata = null;
-                    tempAudio.oncanplay = null;
-                    tempAudio.oncanplaythrough = null;
-                    tempAudio.onerror = null;
-                    console.warn(`[预加载] ⚠️ ${audioFile} 预加载失败`);
-                    failedCount++;
-                    resolve();
-                  };
-                  tempAudio.onloadedmetadata = onSuccess;
-                  tempAudio.oncanplay = onSuccess;
-                  tempAudio.oncanplaythrough = onSuccess;
-                  tempAudio.onerror = onError;
-
-                  // 3) 一定要保存并在成功/失败时 clearTimeout
-                  const t = setTimeout(() => {
-                    onError(new Error('timeout'));
-                  }, 12000); // 适当放宽到 12s，避免慢网/冷缓存误判
-                });
-              } catch (error) {
-                console.warn(`[预加载] ❌ ${audioFile} 预加载异常:`, error);
+                // 2) 使用带重试的加载器
+                await loadAudioWithRetry(audioUrl);
+                loadedCount++;
+                console.log(`[预加载] ✅ ${audioFile} 预加载成功`);
+              } catch (e) {
                 failedCount++;
+                console.error(`[预加载] ❌ ${audioFile} 最终失败: ${e.message}`);
               }
             });
             
@@ -2401,6 +2473,9 @@
       async function disconnect() {
         elements.disconnectButton.disabled = true;
         
+        // 🛑 最优先：立即停止所有音频，防止"串台"
+        stopAllAudios();
+        
         try {
 
           // ① 先解绑所有 client 事件（对称）
@@ -2555,10 +2630,6 @@
           log('系统', `Dify 应用切换请求失败: ${error.message}`, 'error');
         }
       }
-
-
-
-
 
 
 

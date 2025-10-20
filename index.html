@@ -351,6 +351,12 @@
         padding: 2px 6px;
         border-radius: 6px;
       }
+
+      .control-button.active {
+        background-color: #48bb78;
+        color: white;
+        font-weight: bold;
+      }
     </style>
   </head>
   <body>
@@ -394,6 +400,17 @@
         <button id="disconnectButton" class="danger" disabled>断开连接</button>
         <button id="exportLogsButton" class="primary">导出日志</button>
       </section>
+
+      <!-- Dify App Selection -->
+      <div class="controls-panel">
+        <div class="control-group">
+          <span class="control-label">选择Dify应用:</span>
+          <div class="buttons">
+            <button id="difyApp1Button" class="control-button" data-app="dify_app_1" onclick="setDifyApp('dify_app_1')">通用应用</button>
+            <button id="difyApp2Button" class="control-button active" data-app="dify_app_2" onclick="setDifyApp('dify_app_2')">反诈应用</button>
+          </div>
+        </div>
+      </div>
 
       <section class="meter">
         <div>
@@ -2470,6 +2487,41 @@
           remoteAudioTrack.setVolume(volume);
         }
       });
+
+      // Dify App Selection Logic
+      const difyApp1Button = document.getElementById("difyApp1Button");
+      const difyApp2Button = document.getElementById("difyApp2Button");
+
+      async function setDifyApp(appName) {
+        try {
+          const response = await fetch('/api/set_dify_app', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ app_name: appName }),
+          });
+          const result = await response.json();
+          if (result.ok) {
+            log('系统', `Dify 应用已切换到: ${appName}`, 'success');
+            // Update button styles
+            if (appName === 'dify_app_1') {
+              difyApp1Button.classList.add('active');
+              difyApp2Button.classList.remove('active');
+            } else {
+              difyApp1Button.classList.remove('active');
+              difyApp2Button.classList.add('active');
+            }
+          } else {
+            log('系统', `Dify 应用切换失败: ${result.error}`, 'error');
+          }
+        } catch (error) {
+          log('系统', `Dify 应用切换请求失败: ${error.message}`, 'error');
+        }
+      }
+
+      difyApp1Button.addEventListener("click", () => setDifyApp('dify_app_1'));
+      difyApp2Button.addEventListener("click", () => setDifyApp('dify_app_2'));
 
 
 
